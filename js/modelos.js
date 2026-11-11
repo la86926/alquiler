@@ -1,6 +1,9 @@
 /* Modelos 3D de los muebles, armados con piezas simples para que la caja total mida exactamente
    ancho × fondo × alto. Ejes locales: x = ancho, y = alto, z = fondo; el frente mira hacia +z. */
 import * as THREE from 'three';
+import { realzar, productosReales, plantaReal } from './realista.js?v=1.3.0';
+
+let REAL = false;   // 4D: acabados reales
 
 const mats = new Map();
 function mat(color, o = {}) {
@@ -51,6 +54,7 @@ function estante(g, w, d, h, niv, col, cerrado) {
 }
 const TONOS = ['#f3c6cf', '#c7dcf3', '#f2e2a8', '#cfe6d2', '#e2d3f0', '#f5d2b8', '#d6dde4'];
 function productos(g, w, d, y, h, semilla) {
+  if (REAL) return productosReales(g, w, d, y, h, semilla);
   if (h < 0.05) return;
   let x = -w / 2, i = semilla;
   while (x < w / 2 - 0.06) {
@@ -96,7 +100,8 @@ function letreroBano(g, x, y, z) {
   const p = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.075), new THREE.MeshBasicMaterial({ map: texBano, toneMapped: false, transparent: true }));
   p.position.set(x, y, z); g.add(p);
 }
-export function construirModelo(o) {
+export function construirModelo(o, real = false) {
+  REAL = real;
   const g = new THREE.Group();
   const w = o.w, d = o.d, h = o.h, c = o.c || '#dddddd', m = mat(c);
   switch (o.k) {
@@ -423,6 +428,7 @@ export function construirModelo(o) {
       break;
     }
     case 'planta': {
+      if (REAL) { plantaReal(g, w, h); break }
       cil(g, w / 2 * 0.7, 0.35, 0, 0, 0, mat('#e8d8c8'));
       const hoja = new THREE.Mesh(new THREE.SphereGeometry(w / 2, 16, 12), mat('#9fc7a6', { roughness: 0.9 }));
       hoja.scale.set(1, (h - 0.35) / w, 1); hoja.position.y = 0.35 + (h - 0.35) / 2; hoja.castShadow = true; g.add(hoja);
@@ -432,6 +438,8 @@ export function construirModelo(o) {
     case 'dispensador': caja(g, w, h * 0.65, d, 0, 0, 0, BLANCO()); cil(g, w * 0.38, h * 0.35, 0, h * 0.65, 0, mat('#bfe0f5', { transparent: true, opacity: 0.6 })); break;
     default: caja(g, w, h, d, 0, 0, 0, m);
   }
+  if (REAL) realzar(g, o);
+  REAL = false;
   return g;
 }
 

@@ -1,8 +1,10 @@
 /* Vista 3D (three.js). Mapeo: x del plano → x, altura → y, y del plano → −z. */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { anilloMuros } from './plano.js?v=1.2.4';
-import { construirModelo } from './modelos.js?v=1.2.4';
+import { anilloMuros } from './plano.js?v=1.3.0';
+import { construirModelo } from './modelos.js?v=1.3.0';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { texPiso, texPared, texAsfalto, texVereda, uvMundo } from './realista.js?v=1.3.0';
 
 const rad = g => g * Math.PI / 180;
 
@@ -24,11 +26,12 @@ export function crearVista3D(cont, cb) {
   ctl.maxPolarAngle = Math.PI / 2 - 0.02; ctl.minDistance = 0.08; ctl.maxDistance = 40;
   ctl.zoomToCursor = true;                       // el zoom va hacia donde están los dedos o el mouse
 
-  escena.add(new THREE.HemisphereLight('#ffffff', '#ddd6cb', 1.35));
+  const cielo = new THREE.HemisphereLight('#ffffff', '#ddd6cb', 1.35);
   const sol = new THREE.DirectionalLight('#fff6ea', 1.5);
   sol.castShadow = false;
-  escena.add(sol, sol.target);
-  escena.add(new THREE.AmbientLight('#ffffff', 0.25));
+  const amb = new THREE.AmbientLight('#ffffff', 0.25);
+  escena.add(cielo, sol, sol.target, amb);
+  let real = false, ambiente = null;   // 4D: acabados reales, luz de ambiente y sombras suaves
 
   const casa = new THREE.Group(), muebles = new THREE.Group();
   escena.add(casa, muebles);
@@ -68,12 +71,14 @@ export function crearVista3D(cont, cb) {
     casa.clear();
     const forma = pts => { const s = new THREE.Shape(); pts.forEach((q, i) => i ? s.lineTo(q[0], q[1]) : s.moveTo(q[0], q[1])); s.closePath(); return s };
     // suelo exterior y vereda
-    const suelo = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: '#e7e3dc', roughness: 1 }));
+    const suelo = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: real ? '#d9d5cd' : '#e7e3dc', roughness: 1 }));
     suelo.rotation.x = -Math.PI / 2; suelo.position.set(g.centro[0], -0.02, -g.centro[1]); suelo.receiveShadow = true; casa.add(suelo);
     const vx0 = g.caja.x0 - 3, vx1 = g.caja.x1 + 3;
-    const vereda = new THREE.Mesh(new THREE.BoxGeometry(vx1 - vx0, 0.12, 1.6), new THREE.MeshStandardMaterial({ color: '#d9d6cf', roughness: 1 }));
+    const vereda = new THREE.Mesh(new THREE.BoxGeometry(vx1 - vx0, 0.12, 1.6), real ? new THREE.MeshStandardMaterial({ map: texVereda(), bumpMap: texVereda(), bumpScale: 0.4, roughness: 0.95 }) : new THREE.MeshStandardMaterial({ color: '#d9d6cf', roughness: 1 }));
+    if (real) uvMundo(vereda.geometry, 1);
     vereda.position.set((vx0 + vx1) / 2, 0.04 - 0.1, 0.8 + p.muro * 0); vereda.receiveShadow = true; casa.add(vereda);
-    const pista = new THREE.Mesh(new THREE.PlaneGeometry(vx1 - vx0 + 30, 7), new THREE.MeshStandardMaterial({ color: '#c6c9ce', roughness: 1 }));
+    const pista = new THREE.Mesh(new THREE.PlaneGeometry(vx1 - vx0 + 30, 7), real ? new THREE.MeshStandardMaterial({ map: texAsfalto(), roughness: 0.95 }) : new THREE.MeshStandardMaterial({ color: '#c6c9ce', roughness: 1 }));
+    if (real) uvMundo(pista.geometry, 2);
     pista.rotation.x = -Math.PI / 2; pista.position.set((vx0 + vx1) / 2, -0.015, 1.6 + 3.5); pista.receiveShadow = true; casa.add(pista);
     for (let i = -6; i < 7; i++) { const l = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.12), new THREE.MeshBasicMaterial({ color: '#f4f4f0' })); l.rotation.x = -Math.PI / 2; l.position.set((vx0 + vx1) / 2 + i * 2.6, -0.01, 5.1); casa.add(l) }
     // borde de la vereda: la línea que marca el lado de la calle
@@ -90,17 +95,20 @@ export function crearVista3D(cont, cb) {
       casa.add(sp); letras.push(sp);
     }
     // piso
-    const piso = new THREE.Mesh(new THREE.ShapeGeometry(forma(g.pts)), new THREE.MeshStandardMaterial({ map: texturaPiso(), roughness: 0.85 }));
+    const piso = new THREE.Mesh(new THREE.ShapeGeometry(forma(g.pts)), real ? new THREE.MeshPhysicalMaterial({ map: texPiso(), roughness: 0.32, clearcoat: 0.35, clearcoatRoughness: 0.25 }) : new THREE.MeshStandardMaterial({ map: texturaPiso(), roughness: 0.85 }));
+    if (real) uvMundo(piso.geometry, 1.2);
     piso.rotation.x = -Math.PI / 2; piso.receiveShadow = true; casa.add(piso);
     // muros
     // cada pared por separado, para poder ocultar la que tapa la vista al caminar
     const [, Ax, Dx, Cx, Bx] = anilloMuros(g, p.muro);
-    const matM = [new THREE.MeshStandardMaterial({ color: '#c9b9a6', roughness: 0.95 }), new THREE.MeshStandardMaterial({ color: '#f7f5f0', roughness: 0.92 })];
+    const matM = real ? [new THREE.MeshStandardMaterial({ color: '#c4b39e', map: texPared(), roughness: 0.95 }), new THREE.MeshStandardMaterial({ color: '#f3eee7', map: texPared(), bumpMap: texPared(), bumpScale: 0.3, roughness: 0.9 })]
+      : [new THREE.MeshStandardMaterial({ color: '#c9b9a6', roughness: 0.95 }), new THREE.MeshStandardMaterial({ color: '#f7f5f0', roughness: 0.92 })];
     mallaMuros = new THREE.Group(); murosPor = {};
     for (const [id, q] of Object.entries({ BC: [g.B, g.C, Cx, Bx], CD: [g.C, g.D, Dx, Cx], DA: [g.D, g.A, Ax, Dx] })) {
       const geoM = new THREE.ExtrudeGeometry(forma(q), { depth: p.alto, bevelEnabled: false });
       geoM.rotateX(-Math.PI / 2);
-      const m = new THREE.Mesh(geoM, matM); mallaMuros.add(m); murosPor[id] = m;
+      if (real) uvMundo(geoM, 1);
+      const m = new THREE.Mesh(geoM, matM); m.castShadow = m.receiveShadow = real; mallaMuros.add(m); murosPor[id] = m;
     }
     mallaMuros.scale.y = altoMuros; casa.add(mallaMuros);
     // portón enrollable (rieles y caja arriba)
@@ -111,8 +119,25 @@ export function crearVista3D(cont, cb) {
     // sol según el tamaño
     const R = Math.max(g.caja.x1 - g.caja.x0, g.caja.y1 - g.caja.y0);
     sol.position.set(g.centro[0] + R * 0.8, 9, -g.centro[1] + R * 1.1); sol.target.position.set(g.centro[0], 0, -g.centro[1]);
-    const sc = sol.shadow.camera; sc.left = sc.bottom = -R; sc.right = sc.top = R; sc.near = 0.5; sc.far = 30; sc.updateProjectionMatrix();
+    const sc = sol.shadow.camera; sc.left = sc.bottom = -R - 2; sc.right = sc.top = R + 2; sc.near = 0.5; sc.far = 30; sc.updateProjectionMatrix();
     alturaMuros(altoMuros);
+    sucio = true;
+  }
+
+  /* 4D: los mismos muebles con acabados reales, luz de ambiente (reflejos) y sombras suaves */
+  function realista(on) {
+    on = !!on; if (on === real) return;
+    real = on;
+    if (on && !ambiente) { const pm = new THREE.PMREMGenerator(renderer); ambiente = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose() }
+    escena.environment = on ? ambiente : null; escena.environmentIntensity = 0.38;
+    renderer.shadowMap.enabled = on; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    sol.castShadow = on; sol.shadow.mapSize.set(2048, 2048); sol.shadow.bias = -0.0004; sol.shadow.normalBias = 0.02;
+    sol.shadow.map?.dispose(); sol.shadow.map = null;
+    sol.intensity = on ? 2.3 : 1.5; cielo.intensity = on ? 0.5 : 1.35; amb.intensity = on ? 0.05 : 0.25;
+    renderer.toneMappingExposure = on ? 0.92 : 1.05;
+    if (g) armarCasa(g, plano);
+    escena.traverse(o => { if (o.material) [].concat(o.material).forEach(m => { m.needsUpdate = true }) });
+    if (paseo) { escena.remove(paseo.avatar); paseo.avatar = avatarNuevo(); paseo.avatar.visible = !paseo.ojos; escena.add(paseo.avatar) }
     sucio = true;
   }
 
@@ -123,7 +148,7 @@ export function crearVista3D(cont, cb) {
     sucio = true;
   }
 
-  const firma = o => [o.k, o.w, o.d, o.h, o.c, o.niv, o.cerrado].join('|');
+  const firma = o => [o.k, o.w, o.d, o.h, o.c, o.niv, o.cerrado, real].join('|');
   function ponerMuebles(items, estados, sel) {
     const vivos = new Set();
     for (const o of items) {
@@ -134,7 +159,7 @@ export function crearVista3D(cont, cb) {
       if (!r || r.firma !== f) {
         if (r) muebles.remove(r.grupo);
         const grupo = new THREE.Group();
-        const m = construirModelo(o); grupo.add(m);
+        const m = construirModelo(o, real); grupo.add(m);
         const caja = new THREE.Mesh(new THREE.BoxGeometry(o.w, o.h, o.d), new THREE.MeshBasicMaterial({ visible: false }));
         caja.position.y = o.h / 2; caja.userData.uid = o.uid; grupo.add(caja);
         const borde = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(o.w + 0.01, o.h + 0.01, o.d + 0.01)), new THREE.LineBasicMaterial({ color: '#2f6fdb' }));
@@ -457,7 +482,8 @@ export function crearVista3D(cont, cb) {
   }
 
   return {
-    armarCasa, ponerMuebles, vista, alturaMuros,
+    armarCasa, ponerMuebles, vista, alturaMuros, realista,
+    get real() { return real },
     get altoMuros() { return altoMuros },
     tema() { escena.background = new THREE.Color(fondo()); sucio = true },
     mostrar(on) { const antes = visible; visible = on; if (!on && paseo) salir(false); if (on && !antes) { tam(); sucio = true; requestAnimationFrame(bucle) } },

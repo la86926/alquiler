@@ -1,9 +1,9 @@
-import { CAT, NEGOCIOS, FUENTES, COL } from './catalogo.js?v=1.2.4';
-import { PLANO_INICIAL, ETQ, colocar, construir, revisar, chocan, iman, acomodar, buscarLugar, areaOcupada, distanciaMuros } from './plano.js?v=1.2.4';
-import { crearVista2D } from './vista2d.js?v=1.2.4';
-import { generarDXF } from './dxf.js?v=1.2.4';
+import { CAT, NEGOCIOS, FUENTES, COL } from './catalogo.js?v=1.3.0';
+import { PLANO_INICIAL, ETQ, colocar, construir, revisar, chocan, iman, acomodar, buscarLugar, areaOcupada, distanciaMuros } from './plano.js?v=1.3.0';
+import { crearVista2D } from './vista2d.js?v=1.3.0';
+import { generarDXF } from './dxf.js?v=1.3.0';
 
-const VERSION = '1.2.4';
+const VERSION = '1.3.0';
 const LS = 'alq-estado-v1';
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -40,7 +40,7 @@ function nuevoEstado() { return { v: 1, ter: 4, plano: Object.assign({}, PLANO_I
    se cambia el terreno y se vuelven a ubicar todos los muebles. */
 function migrar(e) {
   if (!e || (e.ter || 1) >= 4) return false;
-  // v1.2.4: se empieza de nuevo con el terreno ABCD y la distribución propuesta de cada negocio
+  // v1.3.0: se empieza de nuevo con el terreno ABCD y la distribución propuesta de cada negocio
   e.ter = 4;
   e.plano = Object.assign({}, PLANO_INICIAL, { muro: e.plano?.muro || PLANO_INICIAL.muro, alto: e.plano?.alto || PLANO_INICIAL.alto }, e.plano?.calle ? { calle: e.plano.calle } : {});
   const g = construir(e.plano);
@@ -113,7 +113,7 @@ const v2d = crearVista2D($('v2d'), {
 });
 
 /* ---------- Candado (fijar muebles): memoria propia en 2D y en 3D ---------- */
-const fijo = () => E.vista === '3d' ? E.fijo3d : E.fijo2d;
+const fijo = () => E.vista !== '2d' ? E.fijo3d : E.fijo2d;   // 3D y 4D comparten el candado
 function pintarFijo() {
   const f = fijo();
   $('bFijo').setAttribute('aria-pressed', f);
@@ -124,7 +124,7 @@ function pintarFijo() {
 }
 const arrastrando = () => Object.keys(arr).length > 0;
 $('bFijo').onclick = () => {
-  if (E.vista === '3d') E.fijo3d = !E.fijo3d; else E.fijo2d = !E.fijo2d;
+  if (E.vista !== '2d') E.fijo3d = !E.fijo3d; else E.fijo2d = !E.fijo2d;
   guardar(); pintarFijo(); pintar();
   toast(fijo() ? `Todo fijo en ${E.vista.toUpperCase()}` : `Ya puedes mover los muebles en ${E.vista.toUpperCase()}`);
 };
@@ -205,7 +205,7 @@ function pintar() {
   const N = neg();
   est = revisar(G, N.items);
   v2d.poner(G, E.plano, N.items, est, sel);
-  if (v3d && E.vista === '3d') v3d.ponerMuebles(N.items, est, sel);
+  if (v3d && E.vista !== '2d') v3d.ponerMuebles(N.items, est, sel);
   // título
   const d = def(E.cur);
   $('titTx').textContent = d.n; $('titIc').innerHTML = icono(d.ic);
@@ -234,23 +234,26 @@ function pintar() {
   if (abierta === 'hEdit' && o) pintarDist(o);
 }
 
-/* ---------- 2D / 3D ---------- */
+/* ---------- 2D / 3D / 4D (el 4D es el mismo 3D con acabados reales) ---------- */
 async function modo(m) {
   E.vista = m; guardar();
-  $('b2d').setAttribute('aria-selected', m === '2d'); $('b3d').setAttribute('aria-selected', m === '3d');
-  $('v2d').hidden = m !== '2d'; $('v3d').hidden = m !== '3d';
-  $('ctl2d').hidden = m !== '2d'; $('ctl3d').hidden = m !== '3d';
-  pintarFijo(); $('bAng').style.visibility = m === '3d' ? 'hidden' : '';
-  if (m === '3d') {
+  const tres = m !== '2d';
+  $('b2d').setAttribute('aria-selected', m === '2d'); $('b3d').setAttribute('aria-selected', m === '3d'); $('b4d').setAttribute('aria-selected', m === '4d');
+  $('v2d').hidden = tres; $('v3d').hidden = !tres;
+  $('ctl2d').hidden = tres; $('ctl3d').hidden = !tres;
+  document.body.classList.toggle('v4d', m === '4d');
+  pintarFijo(); $('bAng').style.visibility = tres ? 'hidden' : '';
+  if (tres) {
     if (v2d.midiendo) { v2d.medir(false); $('bMedir').setAttribute('aria-pressed', 'false') }
     await asegurar3D();
-    if (!v3d) return;
+    if (!v3d || E.vista !== m) return;
+    v3d.realista(m === '4d');
     v3d.mostrar(true); pintar();
   } else if (v3d) v3d.mostrar(false);
 }
 async function asegurar3D() {
   if (v3d) return v3d;
-  if (!cargando3d) cargando3d = import('./vista3d.js?v=1.2.4').then(m => {
+  if (!cargando3d) cargando3d = import('./vista3d.js?v=1.3.0').then(m => {
     v3d = m.crearVista3D($('v3d'), { item, seleccionar: u => seleccionar(u), arrastrar, fijo: () => fijo(), anguloEl: $('bAng'),
       items: () => neg().items, estatura: () => E.estatura || 1.65, fijarEstatura: h => { E.estatura = h; guardar() }, paseo: on => { document.body.classList.toggle('paseo-on', on); if (on) { seleccionar(null); cerrarHoja() } } });
     v3d.armarCasa(G, E.plano); v3d.mostrar(true); v3d.vista('iso', false);
@@ -260,6 +263,7 @@ async function asegurar3D() {
 }
 $('b2d').onclick = () => modo('2d');
 $('b3d').onclick = () => modo('3d');
+$('b4d').onclick = () => modo('4d');
 document.querySelectorAll('#ctl3d [data-v]').forEach(b => b.onclick = () => v3d && v3d.vista(b.dataset.v));
 $('bMuros').onclick = () => { if (!v3d) return; const a = v3d.altoMuros > 0.9 ? 0.36 : 1; v3d.alturaMuros(a); $('bMuros').setAttribute('aria-pressed', a < 1) };
 $('zIn').onclick = () => v2d.zoom(1.25); $('zOut').onclick = () => v2d.zoom(0.8); $('zFit').onclick = () => v2d.encuadrar();
@@ -583,7 +587,7 @@ const slug = s => s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replac
 $('exDxf').onclick = () => { const d = def(E.cur); bajar(`plano-${slug(d.n)}.dxf`, generarDXF(G, E.plano, neg().items, `Alquiler - ${d.n}`), 'application/dxf') };
 $('exDxf0').onclick = () => bajar('croquis.dxf', generarDXF(G, E.plano, [], 'Alquiler - croquis'), 'application/dxf');
 $('exPng').onclick = async () => {
-  if (E.vista !== '3d') await modo('3d');
+  if (E.vista === '2d') await modo('3d');
   if (!v3d) return;
   setTimeout(() => { const url = v3d.foto(); fetch(url).then(r => r.blob()).then(b => bajar(`3d-${slug(def(E.cur).n)}.png`, b)) }, 600);
 };
@@ -669,6 +673,7 @@ function tutorial() {
     { tx: 'O toca aquí y escribe el ángulo: positivo gira antihorario, negativo horario.', el: () => $('bAng'), anim: 'toca' },
     { tx: 'El candado fija todos los muebles. En 2D empieza abierto para moverlos; en 3D empieza cerrado para que no muevas nada sin querer.', el: () => $('bFijo'), anim: 'toca' },
     { tx: 'En 3D ves lo mismo, en el mismo lugar. Para mover ahí, abre el candado. Con el botón de la persona entras y caminas por dentro con las flechas.', el: () => $('b3d'), anim: 'toca', antes: () => seleccionar(null) },
+    { tx: 'En 4D ves los mismos muebles con acabados reales: madera, tela, vidrio, metal, luz y sombras.', el: () => $('b4d'), anim: 'toca' },
     { tx: 'Elige un negocio y mira si todo cabe.', el: () => $('titBtn'), anim: 'toca' },
     { tx: '¿Prefieres armarlo tú? En la Lista, «Empezar de cero» quita los muebles que vienen por defecto.', el: () => $('lsCero'), anim: 'toca', antes: () => abrir('hLista') },
     { tx: 'Luego agrega los tuyos, con medidas de Sodimac, Promart y otras tiendas.', el: () => $('bAdd'), anim: 'toca', antes: () => cerrarHoja() }
@@ -698,7 +703,7 @@ function tutorial() {
 $('bIman').setAttribute('aria-pressed', E.iman);
 neg();
 pintar();
-modo(E.vista === '3d' ? '3d' : '2d');
+modo(E.vista === '3d' || E.vista === '4d' ? E.vista : '2d');
 if (migrado) { guardar(true); setTimeout(() => toast('Terreno nuevo: cada negocio empezó de nuevo con muebles que caben.'), 600) }
 import('../sync.js?v=' + VERSION).catch(() => {});
 if (!E.tuto) setTimeout(tutorial, 450);
