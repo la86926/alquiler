@@ -317,4 +317,14 @@ body.ter-on .barra,body.ter-on .selbar,body.ter-on .bang{display:none}
 .paseo .phint{position:absolute;left:50%;top:calc(66px + env(safe-area-inset-top,0px));transform:translateX(-50%);margin:0;padding:9px 15px;border-radius:999px;background:var(--fg);color:var(--bg);font:700 13px var(--font);width:max-content;max-width:calc(100% - 32px);text-align:center;transition:opacity .5s}
 .paseo.usado .phint{opacity:0}
 body.paseo-on .barra,body.paseo-on .selbar,body.paseo-on .bang,body.paseo-on .fijo,body.paseo-on .pill{display:none}
-.paseo .pmed{position:absolute;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(214px + env(safe-area-inset-bottom,0px));padding:5px 10px;border-radius:999px;background:var(--card);color:var(--muted);box-shadow:var(--sh);font:700 12px var(--font)}
+.paseo .pmed{pointer-events:auto;border:0;cursor:pointer;position:absolute;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(214px + env(safe-area-inset-bottom,0px));padding:5px 10px;border-radius:999px;background:var(--card);color:var(--muted);box-shadow:var(--sh);font:700 12px var(--font)}
+.paseo .pmed::after{content:" ✎";opacity:.6}
+.paseo .pest{position:absolute;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(252px + env(safe-area-inset-bottom,0px));pointer-events:auto;background:var(--card);border-radius:16px;box-shadow:var(--sh);padding:12px;display:flex;flex-direction:column;gap:10px;width:216px}
+.paseo .pest[hidden]{display:none}
+.paseo .pest b{font-size:13px}
+.paseo .pest-r{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.paseo .pest-r button{width:40px;height:40px;border:0;border-radius:12px;background:var(--faint);color:var(--fg);font:700 20px var(--font);cursor:pointer}
+.paseo .pest-v{font:800 20px var(--font)}
+.paseo .pest-c{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.paseo .pest-c button{height:34px;border:0;border-radius:10px;background:var(--faint);color:var(--fg);font:700 13px var(--font);cursor:pointer}
+.paseo .pest-c button.on{background:var(--blue);color:#fff}

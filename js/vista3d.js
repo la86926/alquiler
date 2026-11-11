@@ -1,8 +1,8 @@
 /* Vista 3D (three.js). Mapeo: x del plano → x, altura → y, y del plano → −z. */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { anilloMuros } from './plano.js?v=1.2.0';
-import { construirModelo } from './modelos.js?v=1.2.0';
+import { anilloMuros } from './plano.js?v=1.2.1';
+import { construirModelo } from './modelos.js?v=1.2.1';
 
 const rad = g => g * Math.PI / 180;
 
@@ -32,7 +32,7 @@ export function crearVista3D(cont, cb) {
 
   const casa = new THREE.Group(), muebles = new THREE.Group();
   escena.add(casa, muebles);
-  let g = null, plano = null, mallaMuros = null, altoMuros = 1;
+  let g = null, plano = null, mallaMuros = null, altoMuros = 1, murosPor = {};
   const mapa = new Map(); // uid → { grupo, firma, borde }
   let seleccion = null, visible = false, sucio = true;
 
@@ -79,24 +79,30 @@ export function crearVista3D(cont, cb) {
     // borde de la vereda: la línea que marca el lado de la calle
     const borde = new THREE.Mesh(new THREE.PlaneGeometry(vx1 - vx0 + 30, 0.1), new THREE.MeshBasicMaterial({ color: '#7d848d' }));
     borde.rotation.x = -Math.PI / 2; borde.position.set((vx0 + vx1) / 2, 0.003, 1.6); casa.add(borde);
+    letras = [];
     // nombre de la calle
     const nom = letrero(p.calle || 'Calle', { alto: 0.5, fondo: 'rgba(22,32,42,.82)', color: '#ffffff', borde: 'rgba(0,0,0,0)' });
-    nom.position.set((g.A[0] + g.B[0]) / 2, 0.45, 2.4); casa.add(nom);
+    nom.position.set((g.A[0] + g.B[0]) / 2, 0.45, 2.4); casa.add(nom); letras.push(nom);
     // letras de las esquinas
-    letras = [];
     for (const k of ['A', 'B', 'C', 'D']) {
       const q = g[k], v = [q[0] - g.centro[0], q[1] - g.centro[1]], L = Math.hypot(...v) || 1;
-      const sp = letrero(k, { alto: 0.46 }); sp.userData.base = [q[0] + v[0] / L * 0.35, -(q[1] + v[1] / L * 0.35)];
+      const sp = letrero(k, { alto: 0.36 }); sp.material.depthTest = !!paseo; sp.position.set(q[0] + v[0] / L * 0.7, 0.3, -(q[1] + v[1] / L * 0.7));   // abajo y afuera de la esquina
       casa.add(sp); letras.push(sp);
     }
     // piso
     const piso = new THREE.Mesh(new THREE.ShapeGeometry(forma(g.pts)), new THREE.MeshStandardMaterial({ map: texturaPiso(), roughness: 0.85 }));
     piso.rotation.x = -Math.PI / 2; piso.receiveShadow = true; casa.add(piso);
     // muros
-    const geoM = new THREE.ExtrudeGeometry(forma(anilloMuros(g, p.muro)), { depth: p.alto, bevelEnabled: false });
-    geoM.rotateX(-Math.PI / 2);
-    mallaMuros = new THREE.Mesh(geoM, [new THREE.MeshStandardMaterial({ color: '#c9b9a6', roughness: 0.95 }), new THREE.MeshStandardMaterial({ color: '#f7f5f0', roughness: 0.92 })]);
-    mallaMuros.castShadow = true; mallaMuros.receiveShadow = true; mallaMuros.scale.y = altoMuros; casa.add(mallaMuros);
+    // cada pared por separado, para poder ocultar la que tapa la vista al caminar
+    const [, Ax, Dx, Cx, Bx] = anilloMuros(g, p.muro);
+    const matM = [new THREE.MeshStandardMaterial({ color: '#c9b9a6', roughness: 0.95 }), new THREE.MeshStandardMaterial({ color: '#f7f5f0', roughness: 0.92 })];
+    mallaMuros = new THREE.Group(); murosPor = {};
+    for (const [id, q] of Object.entries({ BC: [g.B, g.C, Cx, Bx], CD: [g.C, g.D, Dx, Cx], DA: [g.D, g.A, Ax, Dx] })) {
+      const geoM = new THREE.ExtrudeGeometry(forma(q), { depth: p.alto, bevelEnabled: false });
+      geoM.rotateX(-Math.PI / 2);
+      const m = new THREE.Mesh(geoM, matM); mallaMuros.add(m); murosPor[id] = m;
+    }
+    mallaMuros.scale.y = altoMuros; casa.add(mallaMuros);
     // portón enrollable (rieles y caja arriba)
     const metal = new THREE.MeshStandardMaterial({ color: '#d3d8de', roughness: 0.45, metalness: 0.25 });
     for (const q of [g.A, g.B]) { const r = new THREE.Mesh(new THREE.BoxGeometry(0.06, p.alto, 0.08), metal); r.position.set(q[0] + (q === g.A ? 0.03 : -0.03), p.alto / 2, 0.04); r.castShadow = true; casa.add(r); r.userData.porton = 1 }
@@ -113,7 +119,6 @@ export function crearVista3D(cont, cb) {
   function alturaMuros(f) {
     altoMuros = f;
     if (mallaMuros) mallaMuros.scale.y = f;
-    for (const sp of letras) sp.position.set(sp.userData.base[0], (plano ? plano.alto : 2.8) * f + 0.4, sp.userData.base[1]);
     casa.children.forEach(c => { if (c.userData.porton) c.visible = f > 0.9 });
     sucio = true;
   }
@@ -253,15 +258,38 @@ export function crearVista3D(cont, cb) {
   /* ---------- Caminar por dentro: un muñequito que entra desde la vereda ----------
      Flechas (o teclado) para avanzar y girar; arrastrar el dedo para mirar alrededor.
      La cámara va detrás del muñequito o «con sus ojos». No atraviesa paredes ni muebles. */
-  const ESTATURA = 1.65, OJOS = 1.53;                   // muñequito de 1.65 m; los ojos, 12 cm debajo de la coronilla
+  let ESTATURA = (cb.estatura && cb.estatura()) || 1.65;   // muñequito (1.65 m por defecto); los ojos, 12 cm debajo de la coronilla
+  const ojos = () => ESTATURA - 0.12;
   let paseo = null;
   const UI = document.createElement('div'); UI.className = 'paseo'; UI.hidden = true;
   const flecha = (d, rot) => `<button class="pf" data-m="${d}" aria-label="${{ f: 'Avanzar', b: 'Retroceder', l: 'Girar a la izquierda', r: 'Girar a la derecha' }[d]}"><svg viewBox="0 0 24 24" style="transform:rotate(${rot}deg)"><path d="M12 5l7 9H5z"/></svg></button>`;
   UI.innerHTML = `<div class="pad">${flecha('f', 0)}${flecha('l', -90)}${flecha('r', 90)}${flecha('b', 180)}</div>
     <div class="pbtn"><button class="pb" data-a="ojos"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Sus ojos</span></button><button class="pb" data-a="salir"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg><span>Salir</span></button></div>
     <p class="phint">Flechas: caminar · un dedo: mirar · dos dedos: alejar</p>
-    <span class="pmed">Persona: ${ESTATURA.toFixed(2)} m</span>`;
+    <button class="pmed" type="button" aria-label="Cambiar la estatura">Persona: ${ESTATURA.toFixed(2)} m</button>
+    <div class="pest" hidden><b>Estatura</b>
+      <div class="pest-r"><button type="button" data-d="-0.01" aria-label="Menos">−</button><span class="pest-v"></span><button type="button" data-d="0.01" aria-label="Más">+</button></div>
+      <div class="pest-c">${[1.5, 1.6, 1.65, 1.7, 1.75, 1.8].map(h => `<button type="button" data-h="${h}">${h.toFixed(2)}</button>`).join('')}</div></div>`;
   cont.appendChild(UI);
+  // Estatura del muñequito: tocando su medida
+  const pest = UI.querySelector('.pest');
+  function avatarNuevo() {
+    const av = construirModelo({ k: 'persona', w: 0.5, d: 0.3, h: ESTATURA, c: '#a8b8d8' });
+    const visera = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.08), new THREE.MeshStandardMaterial({ color: '#2f6fdb' }));
+    visera.position.set(0, ESTATURA - 0.08, -0.12); av.add(visera);
+    return av;
+  }
+  function estatura(h) {
+    ESTATURA = Math.round(Math.max(0.8, Math.min(2.2, h)) * 100) / 100;
+    UI.querySelector('.pmed').textContent = `Persona: ${ESTATURA.toFixed(2)} m`;
+    pest.querySelector('.pest-v').textContent = `${ESTATURA.toFixed(2)} m`;
+    pest.querySelectorAll('[data-h]').forEach(b => b.classList.toggle('on', +b.dataset.h === ESTATURA));
+    if (paseo) { escena.remove(paseo.avatar); paseo.avatar = avatarNuevo(); paseo.avatar.visible = !paseo.ojos; escena.add(paseo.avatar) }
+    if (cb.fijarEstatura) cb.fijarEstatura(ESTATURA);
+  }
+  UI.querySelector('.pmed').onclick = () => { pest.hidden = !pest.hidden; if (!pest.hidden) estatura(ESTATURA) };
+  pest.querySelectorAll('[data-d]').forEach(b => b.onclick = () => estatura(ESTATURA + +b.dataset.d));
+  pest.querySelectorAll('[data-h]').forEach(b => b.onclick = () => estatura(+b.dataset.h));
   const teclas = new Set();
   UI.querySelectorAll('.pf').forEach(b => {
     const on = ev => { ev.preventDefault(); teclas.add(b.dataset.m); b.classList.add('on'); try { b.setPointerCapture(ev.pointerId) } catch (e) {} };
@@ -271,7 +299,7 @@ export function crearVista3D(cont, cb) {
   });
   UI.querySelector('[data-a="salir"]').onclick = () => salir(true);
   UI.querySelector('[data-a="ojos"]').onclick = () => {
-    if (!paseo) return; paseo.ojos = !paseo.ojos; paseo.avatar.visible = !paseo.ojos; camara.fov = 45; camara.updateProjectionMatrix(); if (!paseo.ojos && paseo.zoom < 0.8) paseo.zoom = 0.8;
+    if (!paseo) return; paseo.ojos = !paseo.ojos; paseo.avatar.visible = !paseo.ojos; paseo.lente = 0; camara.fov = 45; camara.updateProjectionMatrix(); if (!paseo.ojos && paseo.zoom < 0.8) paseo.zoom = 0.8;
     UI.querySelector('[data-a="ojos"] span').textContent = paseo.ojos ? 'Desde atrás' : 'Sus ojos'; sucio = true;
   };
   const MAPA_TECLAS = { ArrowUp: 'f', KeyW: 'f', ArrowDown: 'b', KeyS: 'b', ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r' };
@@ -285,7 +313,7 @@ export function crearVista3D(cont, cb) {
   const ZMIN = 0.12, ZMAX = 16;   // por debajo de 0.8 m la cámara ya no se acerca más: cierra el lente (zoom fuerte)
   const acercar = k => {
     if (!paseo) return;
-    if (paseo.ojos) { camara.fov = Math.max(6, Math.min(80, camara.fov * k)); camara.updateProjectionMatrix() }
+    if (paseo.ojos) paseo.lente = Math.max(-1, Math.min(1, paseo.lente + Math.log(k) * 0.9));   // >0: se ve más (sale un poco detrás de la cabeza); <0: acerca
     else paseo.zoom = Math.max(ZMIN, Math.min(ZMAX, paseo.zoom * k));
     UI.classList.add('usado');
   };
@@ -331,20 +359,37 @@ export function crearVista3D(cont, cb) {
     for (const mu of g.muros) { if (mu.abierto) continue; if ((x - mu.p[0]) * mu.out[0] + (y - mu.p[1]) * mu.out[1] > -0.12) return false }
     return true;
   }
+  // al caminar, las letras y el nombre de la calle se tapan con las paredes como cualquier objeto
+  const letrasDetras = on => { for (const sp of letras) { sp.material.depthTest = on; sp.material.needsUpdate = true } };
+  // los muebles que quedan entre la cámara y el muñequito también se ocultan un momento
+  let ocultos = new Set();
+  const rayoVista = new THREE.Raycaster();
+  function despejar(desde, hasta) {
+    const dir = hasta.clone().sub(desde), dist = dir.length(); dir.normalize();
+    rayoVista.set(desde, dir); rayoVista.far = Math.max(0, dist - 0.35);
+    const cajas = []; for (const r of mapa.values()) cajas.push(r.caja);
+    const ahora = new Set(rayoVista.intersectObjects(cajas, false).map(h => h.object.userData.uid));
+    for (const uid of new Set([...ocultos, ...ahora])) { const r = mapa.get(uid); if (r) r.grupo.children[0].visible = !ahora.has(uid) }
+    ocultos = ahora;
+  }
+  function mostrarTodo() { for (const uid of ocultos) { const r = mapa.get(uid); if (r) r.grupo.children[0].visible = true } ocultos = new Set() }
   function entrar() {
     if (paseo) return;
-    const avatar = construirModelo({ k: 'persona', w: 0.5, d: 0.3, h: ESTATURA, c: '#a8b8d8' });
-    const visera = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.08), new THREE.MeshStandardMaterial({ color: '#2f6fdb' }));
-    visera.position.set(0, ESTATURA - 0.08, -0.12); avatar.add(visera);
+    ESTATURA = (cb.estatura && cb.estatura()) || ESTATURA;
+    UI.querySelector('.pmed').textContent = `Persona: ${ESTATURA.toFixed(2)} m`; pest.hidden = true;
+    const avatar = avatarNuevo();
     escena.add(avatar);
-    paseo = { x: (g.A[0] + g.B[0]) / 2, y: -0.75, yaw: 0, pitch: -0.05, ojos: false, zoom: innerWidth < 600 ? 2.6 : 1.9, avatar, t: performance.now() };
+    paseo = { x: (g.A[0] + g.B[0]) / 2, y: -0.75, yaw: 0, pitch: -0.05, ojos: false, lente: 0, zoom: innerWidth < 600 ? 2.6 : 1.9, avatar, t: performance.now() };
     ctl.enabled = false; UI.hidden = false; UI.classList.remove('usado'); UI.querySelector('[data-a="ojos"] span').textContent = 'Sus ojos';
     if (cb.paseo) cb.paseo(true);
+    letrasDetras(true);
     sucio = true;
   }
   function salir(volver) {
     if (!paseo) return;
     escena.remove(paseo.avatar); paseo = null; teclas.clear(); mira = null; pinza = null; dedos.clear();
+    for (const k in murosPor) murosPor[k].visible = true; pest.hidden = true;
+    mostrarTodo(); letrasDetras(false);
     if (camara.fov !== 45) { camara.fov = 45; camara.updateProjectionMatrix() }
     ctl.enabled = true; UI.hidden = true;
     if (cb.paseo) cb.paseo(false);
@@ -364,22 +409,33 @@ export function crearVista3D(cont, cb) {
     const fx = Math.sin(paseo.yaw), fy = Math.cos(paseo.yaw);
     paseo.avatar.position.set(paseo.x, 0, -paseo.y); paseo.avatar.rotation.y = -paseo.yaw;
     if (paseo.ojos) {
-      camara.position.set(paseo.x, OJOS, -paseo.y);
+      /* «Sus ojos»: al alejar con dos dedos la vista se abre y la cámara sale un poco detrás de la cabeza
+         (se ven la nuca y los hombros); al acercar, el lente acerca como unos binoculares */
+      const L = paseo.lente, atras = Math.max(0, L) * 0.75;
+      const fov = L >= 0 ? 45 + L * 22 : 45 * (1 + L * 0.86);
+      if (Math.abs(camara.fov - fov) > 0.01) { camara.fov = fov; camara.updateProjectionMatrix() }
+      paseo.avatar.visible = atras > 0.12;
+      const ccx = paseo.x - fx * atras, ccy = paseo.y - fy * atras;
+      camara.position.set(ccx, ojos() + Math.max(0, L) * 0.14, -ccy);
+      for (const mu of g.muros) if (murosPor[mu.id]) murosPor[mu.id].visible = (ccx - mu.p[0]) * mu.out[0] + (ccy - mu.p[1]) * mu.out[1] < -0.02;
+      if (atras > 0.12) despejar(camara.position, new THREE.Vector3(paseo.x, ESTATURA - 0.1, -paseo.y)); else if (ocultos.size) mostrarTodo();
     } else {
       // detrás del muñequito; al alejarse con dos dedos sube por encima de las paredes y se ve todo el plano
       let d = Math.max(0.8, paseo.zoom);
       const fov = 45 * Math.min(1, paseo.zoom / 0.8);
       if (Math.abs(camara.fov - fov) > 0.01) { camara.fov = fov; camara.updateProjectionMatrix() }
       const alto = z => 2.05 + Math.max(0, z - 1.9) * 0.62 + Math.max(0, 1.9 - z) * 0.25;
-      const sobreMuros = z => alto(z) > (plano ? plano.alto : 2.8) * altoMuros + 0.25;
-      while (d > 0.45 && !sobreMuros(d) && !camLibre(paseo.x - fx * d, paseo.y - fy * d)) d -= 0.1;
       camara.position.set(paseo.x - fx * d, alto(d), -(paseo.y - fy * d));
+      // la pared que queda entre la cámara y el muñequito se vuelve invisible (por ejemplo, al girar en el fondo)
+      const ccx = paseo.x - fx * d, ccy = paseo.y - fy * d;
+      for (const mu of g.muros) if (murosPor[mu.id]) murosPor[mu.id].visible = (ccx - mu.p[0]) * mu.out[0] + (ccy - mu.p[1]) * mu.out[1] < -0.02;
+      despejar(camara.position, new THREE.Vector3(paseo.x, ESTATURA * 0.75, -paseo.y));
       const adelante = Math.max(0.3, 2.5 - Math.max(0, d - 1.9) * 0.45);
       camara.lookAt(paseo.x + fx * adelante, 1.05 + Math.tan(paseo.pitch) * 2.5, -(paseo.y + fy * adelante));
       renderer.render(escena, camara); sucio = false;
       return;
     }
-    const ly = OJOS + Math.tan(paseo.pitch) * 2.5;
+    const ly = ojos() + Math.tan(paseo.pitch) * 2.5;
     camara.lookAt(paseo.x + fx * 2.5, ly, -(paseo.y + fy * 2.5));
     renderer.render(escena, camara); sucio = false;
   }
@@ -399,6 +455,7 @@ export function crearVista3D(cont, cb) {
     mostrar(on) { const antes = visible; visible = on; if (!on && paseo) salir(false); if (on && !antes) { tam(); sucio = true; requestAnimationFrame(bucle) } },
     get caminando() { return !!paseo },
     get dondeCamina() { return paseo ? [+paseo.x.toFixed(2), +paseo.y.toFixed(2)] : null },
+    _ir(x, y, yaw) { if (paseo) { paseo.x = x; paseo.y = y; if (yaw != null) paseo.yaw = yaw } },
     salirPaseo() { salir(true) },
     foto() { renderer.render(escena, camara); return renderer.domElement.toDataURL('image/png') }
   };
