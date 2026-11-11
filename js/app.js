@@ -1,9 +1,9 @@
-import { CAT, NEGOCIOS, FUENTES, COL } from './catalogo.js?v=1.1.2';
-import { PLANO_INICIAL, ETQ, esCroquisViejo, construir, revisar, iman, acomodar, buscarLugar, areaOcupada, distanciaMuros } from './plano.js?v=1.1.2';
-import { crearVista2D } from './vista2d.js?v=1.1.2';
-import { generarDXF } from './dxf.js?v=1.1.2';
+import { CAT, NEGOCIOS, FUENTES, COL } from './catalogo.js?v=1.1.4';
+import { PLANO_INICIAL, ETQ, esCroquisViejo, colocar, construir, revisar, iman, acomodar, buscarLugar, areaOcupada, distanciaMuros } from './plano.js?v=1.1.4';
+import { crearVista2D } from './vista2d.js?v=1.1.4';
+import { generarDXF } from './dxf.js?v=1.1.4';
 
-const VERSION = '1.1.2';
+const VERSION = '1.1.4';
 const LS = 'alq-estado-v1';
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -35,12 +35,20 @@ const IC = {
 const icono = k => `<svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${IC[k] || IC.casa}</svg>`;
 
 /* ---------- Estado ---------- */
-function nuevoEstado() { return { v: 1, ter: 2, plano: Object.assign({}, PLANO_INICIAL), cur: 'casa', negs: {}, extra: [], vista: '2d', iman: true, fijo2d: false, fijo3d: true, tuto: 0, t: Date.now() } }
+function nuevoEstado() { return { v: 1, ter: 3, plano: Object.assign({}, PLANO_INICIAL), cur: 'casa', negs: {}, extra: [], vista: '2d', iman: true, fijo2d: false, fijo3d: true, tuto: 0, t: Date.now() } }
 /* Terreno nuevo MBCN (la mitad derecha del croquis): si lo guardado tiene el croquis completo,
    se cambia el terreno y se vuelven a ubicar todos los muebles. */
 function migrar(e) {
-  if (!e || (e.ter || 1) >= 2) return false;
-  e.ter = 2;
+  if (!e || (e.ter || 1) >= 3) return false;
+  const antes = e.ter || 1;
+  e.ter = 3;
+  // v1.1.4: distribuciones hechas a mano para MBCN; los negocios de la web se vuelven a armar
+  if (antes === 2 && mismoPlano(e.plano)) {
+    const propios = new Set((e.extra || []).map(d => d.id));
+    for (const id of Object.keys(e.negs || {})) if (!propios.has(id)) delete e.negs[id];
+    e.t = Date.now();
+    return true;
+  }
   if (!esCroquisViejo(e.plano)) return false;           // medidas propias del usuario: no se tocan
   for (const k of ['AB', 'BC', 'CD', 'DA', 'AC']) e.plano[k] = PLANO_INICIAL[k];
   const g = construir(e.plano);
@@ -55,6 +63,7 @@ function migrar(e) {
   e.t = Date.now();
   return true;
 }
+const mismoPlano = p => !!p && ['AB', 'BC', 'CD', 'DA', 'AC'].every(k => Math.abs((p[k] || 0) - PLANO_INICIAL[k]) < 0.005);
 let migrado = false;
 function cargar() {
   try { const e = JSON.parse(localStorage.getItem(LS)); if (e && e.plano && e.negs) { migrado = migrar(e); return Object.assign(nuevoEstado(), e) } } catch (e) {}
@@ -77,6 +86,16 @@ const zonaDe = id => id === 'bano' ? 'bano' : PARED.has(CAT[id].k) ? 'pared' : '
 function propuesta(id) {
   const d = def(id);
   if (d.base) return { items: d.base.map(o => Object.assign({}, o, { uid: uid() })) };
+  if (d.lay) {                                               // distribución hecha a mano para MBCN
+    const items = d.lay.map(s => colocar(G, nuevoItem(s.id, s.id === 'bano' ? 'bano' : s.m ? 'pared' : 'centro'), s));
+    const r = revisar(G, items), malos = items.filter(o => r[o.uid] !== 'ok');
+    if (malos.length) {                                      // con otras medidas del terreno: lo que no calce se acomoda solo
+      const buenos = items.filter(o => r[o.uid] === 'ok');
+      for (const o of malos) { o.x = null; o.y = null; o.rot = 0 }
+      acomodar(G, malos, buenos);
+    }
+    return { items: items.filter(o => o.x != null) };
+  }
   const items = [];
   for (const p of d.items) for (let i = 0; i < p.n; i++) items.push(nuevoItem(p.id, p.z));
   acomodar(G, items);
@@ -241,7 +260,7 @@ async function modo(m) {
 }
 async function asegurar3D() {
   if (v3d) return v3d;
-  if (!cargando3d) cargando3d = import('./vista3d.js?v=1.1.2').then(m => {
+  if (!cargando3d) cargando3d = import('./vista3d.js?v=1.1.4').then(m => {
     v3d = m.crearVista3D($('v3d'), { item, seleccionar: u => seleccionar(u), arrastrar, fijo: () => fijo(), anguloEl: $('bAng') });
     v3d.armarCasa(G, E.plano); v3d.mostrar(true); v3d.vista('iso', false);
     return v3d;
@@ -619,7 +638,7 @@ $('bIman').setAttribute('aria-pressed', E.iman);
 neg();
 pintar();
 modo(E.vista === '3d' ? '3d' : '2d');
-if (migrado) { guardar(true); setTimeout(() => toast('Terreno nuevo: MBCN. Los muebles se volvieron a ubicar.'), 600) }
+if (migrado) { guardar(true); setTimeout(() => toast('Terreno MBCN: los muebles de cada negocio se volvieron a ubicar.'), 600) }
 import('../sync.js?v=' + VERSION).catch(() => {});
 if (!E.tuto) setTimeout(tutorial, 450);
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => v3d && v3d.tema());

@@ -147,3 +147,40 @@ export const NEGOCIOS = [
   { id: 'masajes', n: 'Masajes / terapia física', ic: 'mano', items: [P('bano', 'bano'), P('camillas', 'centro', 2), P('biombo', 'centro', 2), P('espaldera', 'pared', 2), P('colchoneta', 'centro'), P('carrito', 'pared', 2), P('estofi'), P('escritorio'), P('sillaofi', 'centro'), P('banca3')] },
   { id: 'frutas', n: 'Venta de frutas', ic: 'fruta', items: [P('bano', 'bano'), P('balanza', 'frente'), P('exhfrutas', 'pared', 3), P('jabas', 'pared', 6), P('mesaexh', 'centro', 2), P('visi290'), P('congeladora')] }
 ];
+
+/* ---------- Distribución propuesta para el terreno MBCN ----------
+   Unos 2.31 m de ancho y 6.5 m de fondo. El baño va en el fondo, en la esquina C, y se deja un pasillo
+   de al menos 0.8 m desde el portón hasta su puerta.
+   u = distancia desde el portón medida a lo largo de la pared derecha BC (al centro del mueble);
+   v = distancia desde la pared derecha (al centro); r = giro extra (90: de lado, -90: mirando al portón).
+   R: espalda en la pared derecha · L: en la pared izquierda · F: en el fondo (t = distancia desde C) · X: libre */
+const R = (id, u, o) => ({ id, m: 'BC', u, ...o });
+const L = (id, u, o) => ({ id, m: 'DA', u, ...o });
+const F = (id, t, o) => ({ id, m: 'CD', t, ...o });
+const X = (id, u, v, r = 0) => ({ id, u, v, r });
+// varios seguidos en una pared, desde u0 hacia el fondo
+function fila(m, u0, ids, gap = 0.03, o = {}) {
+  const out = []; let u = u0;
+  for (const id of ids) { const c = CAT[id], largo = (Math.abs(o.r || 0) % 180 === 90 ? c.d : c.w) / 100; out.push({ id, m, u: +(u + largo / 2).toFixed(3), ...o }); u += largo + gap }
+  return out;
+}
+const BANO = F('bano', 0.61);
+const LAY = {
+  casa: [BANO, ...fila('BC', 0.25, ['refrig', 'cocina4', 'lavadero']), R('tv55', 4.0), L('sofa3', 1.75), L('velador', 3.05), L('cama1', 4.25, { r: -90 }), L('ropero', 5.9)],
+  bodega: [BANO, X('vitmost', 1.45, 0.62, -90), ...fila('BC', 1.85, ['estm90', 'estm90', 'congeladora']), ...fila('DA', 1.85, ['visi290', 'visi290', 'estm120', 'jabas']), F('estm90b', 1.8), X('taburete', 2.2, 1.1), L('tacho', 0.9)],
+  mini: [BANO, R('caja', 0.95), ...fila('BC', 1.7, ['visi290', 'visi290', 'congeladora', 'gondolap']), ...fila('DA', 0.75, ['gondolap', 'gondolap', 'gondolap', 'gondolap', 'visi290', 'estm90b'])],
+  ferre: [BANO, X('mostrador', 1.4, 0.82, -90), R('vitvert', 0.65), ...fila('BC', 1.85, ['estm120', 'estm120']), ...fila('DA', 1.85, ['estmm100', 'estmm100', 'estmm100']), L('panel', 5.6), X('taburete', 2.0, 1.15)],
+  tecnico: [BANO, X('vitmost', 1.3, 0.62, -90), R('silla', 0.55), ...fila('BC', 1.75, ['mesatec', 'estm90b', 'archivador'], 0.05), L('estm90b', 2.2), L('mesatec', 4.0), X('sillaofi', 2.45, 0.95, 180), X('sillaofi', 4.0, 1.36, 0), L('tacho', 4.95)],
+  ropa: [BANO, F('probador', 1.79), ...fila('BC', 0.35, ['barrap', 'barrap', 'barrap', 'espejo']), L('maniqui', 0.95), ...fila('DA', 1.25, ['barrap', 'barrap']), L('mostrador', 4.4), X('perchero', 2.0, 1.15, 90)],
+  vet: [BANO, R('mostrador', 1.15), L('banca3', 1.6), R('mesavet', 3.05), ...fila('DA', 2.6, ['jaula', 'jaula', 'jaula']), L('banera', 4.9), R('vitvert', 4.25), F('tacho', 1.45)],
+  vitaminas: [BANO, ...fila('BC', 0.3, ['vitvert', 'vitvert', 'visi290', 'estm90b']), ...fila('DA', 0.75, ['estm90b', 'estm90b', 'estm90b']), X('vitmost', 4.2, 1.7, -90), F('estm90b', 1.75), X('taburete', 5.2, 1.75)],
+  cafe: [BANO, R('planta', 0.6), ...fila('BC', 2.0, ['vitpast', 'barracafe']), ...fila('DA', 0.8, ['mesa2s', 'mesa2s', 'mesar2s'], 0.1, { r: 90 }), F('frigobar', 1.5)],
+  botica: [BANO, X('vitmost', 1.45, 0.62, -90), L('dispensador', 0.9), ...fila('BC', 1.85, ['estofi', 'estofi', 'estofi', 'frigobar']), ...fila('DA', 1.85, ['estofi', 'estofi', 'vitvert']), X('taburete', 2.0, 1.1)],
+  barberia: [BANO, R('mostrador', 1.15), L('banca3', 1.55), ...fila('BC', 2.45, ['puestob', 'puestob'], 0.1), L('lavacab', 5.9, { r: 90 })],
+  consultorio: [BANO, R('planta', 0.6), L('banca3', 1.55), R('archivador', 2.1), R('escritorio', 3.2), X('sillaofi', 3.2, 0.86, 180), L('silla', 3.0), L('silla', 3.5), X('biombo', 4.5, 1.55, 90), R('carrito', 4.85), L('camillam', 5.5)],
+  oficina: [BANO, R('escritorio', 1.0), R('escritorio', 2.9), R('fotocop', 4.4), X('sillaofi', 1.0, 0.86, 180), X('sillaofi', 2.9, 0.86, 180), ...fila('DA', 0.8, ['librero', 'librero']), ...fila('DA', 3.4, ['archivador', 'archivador']), L('dispensador', 4.6)],
+  libreria: [BANO, X('vitmost', 1.0, 0.95, 0), X('taburete', 1.0, 0.3), R('fotocop', 2.0), ...fila('BC', 2.4, ['librero', 'librero', 'librero']), ...fila('DA', 0.75, ['librero', 'librero', 'librero', 'estm90b', 'estm90b'])],
+  masajes: [BANO, R('escritorio', 1.0), X('sillaofi', 1.0, 0.86, 180), L('banca3', 1.55), X('biombo', 2.65, 1.55, 90), R('camillas', 3.85), L('colchoneta', 3.9), F('espaldera', 1.85), L('carrito', 5.6)],
+  frutas: [BANO, R('balanza', 0.95), ...fila('DA', 0.75, ['exhfrutas', 'exhfrutas', 'congeladora', 'jabas']), ...fila('BC', 1.6, ['jabas', 'jabas', 'jabas', 'jabas', 'visi290'])]
+};
+for (const d of NEGOCIOS) if (LAY[d.id]) d.lay = LAY[d.id];

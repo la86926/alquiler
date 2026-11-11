@@ -60,6 +60,27 @@ export function construir(p) {
   };
 }
 
+/* Pone un mueble según una distribución guardada (ver catalogo.js):
+   s.m = muro donde va la espalda ('BC', 'DA' o 'CD'), con s.u (fondo desde el portón) o s.t (distancia desde el inicio del muro);
+   sin s.m, libre con s.u y s.v (distancia desde la pared derecha). s.r = giro extra. */
+export function colocar(g, o, s) {
+  const BC = g.muros[1], r = s.r || 0;
+  const deLado = Math.abs(((r % 180) + 180) % 180 - 90) < 1;
+  const giro = a => +((((a) % 360) + 360) % 360).toFixed(2);
+  if (s.m) {
+    const mu = g.muros.find(m => m.id === s.m);
+    let t;
+    if (s.u != null) { const pu = dot(sub(mu.p, g.B), BC.u); t = (s.u - pu) / dot(mu.u, BC.u) }
+    else t = s.t < 0 ? mu.L + s.t : s.t;
+    const k = (deLado ? o.w : o.d) / 2 + (s.sep ?? 0.003);
+    o.x = mu.p[0] + mu.u[0] * t + mu.inn[0] * k; o.y = mu.p[1] + mu.u[1] * t + mu.inn[1] * k; o.rot = giro(mu.rot + r);
+  } else {
+    o.x = g.B[0] + BC.u[0] * s.u + BC.inn[0] * s.v; o.y = g.B[1] + BC.u[1] * s.u + BC.inn[1] * s.v; o.rot = giro(BC.rot + r);
+  }
+  o.x = +o.x.toFixed(4); o.y = +o.y.toFixed(4);
+  return o;
+}
+
 // Polígono exterior de los muros (BC, CD, DA), sin muro en AB
 export function anilloMuros(g, t) {
   const off = m => [m.p[0] + m.out[0] * t, m.p[1] + m.out[1] * t];
