@@ -3,7 +3,7 @@ import { PLANO_INICIAL, construir, revisar, iman, acomodar, buscarLugar, areaOcu
 import { crearVista2D } from './vista2d.js';
 import { generarDXF } from './dxf.js';
 
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 const LS = 'alq-estado-v1';
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -35,7 +35,7 @@ const IC = {
 const icono = k => `<svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${IC[k] || IC.casa}</svg>`;
 
 /* ---------- Estado ---------- */
-function nuevoEstado() { return { v: 1, plano: Object.assign({}, PLANO_INICIAL), cur: 'casa', negs: {}, extra: [], vista: '2d', iman: true, tuto: 0, t: Date.now() } }
+function nuevoEstado() { return { v: 1, plano: Object.assign({}, PLANO_INICIAL), cur: 'casa', negs: {}, extra: [], vista: '2d', iman: true, fijo2d: false, fijo3d: true, tuto: 0, t: Date.now() } }
 function cargar() {
   try { const e = JSON.parse(localStorage.getItem(LS)); if (e && e.plano && e.negs) return Object.assign(nuevoEstado(), e) } catch (e) {}
   return null;
@@ -79,11 +79,70 @@ function guardar(ya) {
 /* ---------- Vistas ---------- */
 const v2d = crearVista2D($('v2d'), {
   item, seleccionar: u => seleccionar(u), arrastrar, girar,
-  medida: d => { if (d != null) toast(`${d.toFixed(2)} m`) }
+  medida: d => { if (d != null) toast(`${d.toFixed(2)} m`) },
+  fijo: () => fijo(), avisoFijo: () => avisoFijo(), dibujado: () => posAng()
 });
+
+/* ---------- Candado (fijar muebles): memoria propia en 2D y en 3D ---------- */
+const fijo = () => E.vista === '3d' ? E.fijo3d : E.fijo2d;
+function pintarFijo() {
+  const f = fijo();
+  $('bFijo').setAttribute('aria-pressed', f);
+  $('bFijo').setAttribute('aria-label', f ? 'Muebles fijos. Toca para poder moverlos' : 'Fijar todos los muebles');
+  $('fijoTx').textContent = f ? 'Fijo' : 'Mover';
+  document.body.classList.toggle('fijo-on', f);
+  if (f && arrastrando()) for (const u in arr) arrastrar(u, null, null, 'fin');
+}
+const arrastrando = () => Object.keys(arr).length > 0;
+$('bFijo').onclick = () => {
+  if (E.vista === '3d') E.fijo3d = !E.fijo3d; else E.fijo2d = !E.fijo2d;
+  guardar(); pintarFijo(); pintar();
+  toast(fijo() ? `Todo fijo en ${E.vista.toUpperCase()}` : `Ya puedes mover los muebles en ${E.vista.toUpperCase()}`);
+};
+let tAviso = 0;
+function avisoFijo() {
+  const b = $('bFijo'); b.classList.remove('late'); void b.offsetWidth; b.classList.add('late');
+  if (Date.now() - tAviso > 2500) { tAviso = Date.now(); toast('Está fijo. Toca el candado para mover') }
+}
+
+/* ---------- Botón de ángulo junto al mueble ---------- */
+function posAng() {
+  if (E.vista !== '2d' || !sel) return;
+  const r = v2d.rectDe(sel); const b = $('bAng');
+  if (!r) return;
+  if (r.right < 0 || r.left > innerWidth || r.bottom < 60 || r.top > innerHeight - 150) { b.style.visibility = 'hidden'; return }
+  const x = Math.max(56, Math.min(innerWidth - 56, r.left + r.width / 2));
+  const y = Math.max(118, Math.min(innerHeight - 200, r.bottom + 10));
+  b.style.visibility = '';
+  b.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, 0)`;
+}
+const SUG = [-90, -45, -15, 15, 45, 90, 180];
+function abrirAng() {
+  const o = item(sel); if (!o) return;
+  if (fijo()) { avisoFijo(); return }
+  $('angAhora').textContent = `Ahora: ${(+(o.rot || 0).toFixed(1))}°`;
+  $('angIn').value = '';
+  $('angSug').innerHTML = SUG.map(a => `<button type="button" data-a="${a}">${a > 0 ? '+' : ''}${a}°</button>`).join('');
+  $('angSug').querySelectorAll('button').forEach(b => b.onclick = () => girarAng(+b.dataset.a));
+  $('angPop').hidden = false;
+  setTimeout(() => $('angIn').focus(), 30);
+}
+function cerrarAng() { $('angPop').hidden = true; $('angIn').blur() }
+function girarAng(a) {
+  const o = item(sel); if (!o || !isFinite(a) || !a) return;
+  o.rot = +((((o.rot || 0) - a) % 360 + 360) % 360).toFixed(2); // + antihorario en pantalla
+  guardar(); pintar(); if (abierta === 'hEdit') llenarEdit();
+  $('angAhora').textContent = `Ahora: ${(+o.rot.toFixed(1))}°`;
+  toast(`Girado ${a > 0 ? '+' : ''}${a}° · ${a > 0 ? 'antihorario' : 'horario'}`);
+}
+$('bAng').onclick = abrirAng;
+$('angX').onclick = cerrarAng;
+$('angPm').onclick = () => { const v = $('angIn').value.trim(); $('angIn').value = v.startsWith('-') ? v.slice(1) : '-' + v; $('angIn').focus() };
+$('angPop').onsubmit = ev => { ev.preventDefault(); const a = num($('angIn').value); if (!isFinite(a)) { $('angIn').focus(); return } girarAng(a); cerrarAng() };
 const arr = {};
 function arrastrar(u, x, y, fase) {
   const o = item(u); if (!o) return;
+  if (fase !== 'fin' && fijo()) return;
   if (fase === 'fin') {
     delete arr[u];
     o.x = +o.x.toFixed(4); o.y = +o.y.toFixed(4); o.rot = +((o.rot || 0) % 360).toFixed(2);
@@ -96,6 +155,7 @@ function arrastrar(u, x, y, fase) {
 }
 function girar(u, a, fase) {
   const o = item(u); if (!o) return;
+  if (fase !== 'fin' && fijo()) return;
   if (fase === 'fin') { guardar(); pintar(); return }
   a = ((a % 360) + 360) % 360;
   let r = Math.round(a / 15) * 15;
@@ -133,6 +193,9 @@ function pintar() {
   // barra del elegido
   const o = sel && item(sel);
   $('selbar').hidden = !o || o.x == null;
+  $('bAng').hidden = !o || o.x == null || v2d.midiendo;
+  $('bAng').classList.toggle('off', fijo());
+  if (!o && !$('angPop').hidden) cerrarAng();
   if (o && o.x != null) {
     $('sbNom').textContent = o.n;
     const e = est[o.uid];
@@ -148,6 +211,7 @@ async function modo(m) {
   $('b2d').setAttribute('aria-selected', m === '2d'); $('b3d').setAttribute('aria-selected', m === '3d');
   $('v2d').hidden = m !== '2d'; $('v3d').hidden = m !== '3d';
   $('ctl2d').hidden = m !== '2d'; $('ctl3d').hidden = m !== '3d';
+  pintarFijo(); $('bAng').style.visibility = m === '3d' ? 'hidden' : '';
   if (m === '3d') {
     if (v2d.midiendo) { v2d.medir(false); $('bMedir').setAttribute('aria-pressed', 'false') }
     await asegurar3D();
@@ -158,7 +222,7 @@ async function modo(m) {
 async function asegurar3D() {
   if (v3d) return v3d;
   if (!cargando3d) cargando3d = import('./vista3d.js').then(m => {
-    v3d = m.crearVista3D($('v3d'), { item, seleccionar: u => seleccionar(u), arrastrar });
+    v3d = m.crearVista3D($('v3d'), { item, seleccionar: u => seleccionar(u), arrastrar, fijo: () => fijo(), anguloEl: $('bAng') });
     v3d.armarCasa(G, E.plano); v3d.mostrar(true); v3d.vista('iso', false);
     return v3d;
   }).catch(() => { cargando3d = null; toast('No se pudo cargar el 3D. Revisa tu conexión.'); modo('2d') });
@@ -174,7 +238,7 @@ $('bIman').onclick = () => { E.iman = !E.iman; $('bIman').setAttribute('aria-pre
 $('pill').onclick = () => abrir('hLista');
 
 /* ---------- Barra del mueble elegido ---------- */
-function rotar(da) { const o = item(sel); if (!o) return; o.rot = (((o.rot || 0) + da) % 360 + 360) % 360; guardar(); pintar(); if (abierta === 'hEdit') llenarEdit() }
+function rotar(da) { const o = item(sel); if (!o) return; if (fijo()) { avisoFijo(); return } o.rot = (((o.rot || 0) + da) % 360 + 360) % 360; guardar(); pintar(); if (abierta === 'hEdit') llenarEdit() }
 $('sbIzq').onclick = () => rotar(-15); $('sbDer').onclick = () => rotar(15);
 $('sbMed').onclick = $('sbInfo').onclick = () => abrir('hEdit');
 $('sbDup').onclick = () => {
@@ -422,7 +486,7 @@ $('exIn').onchange = ev => {
 
 /* ---------- Mi ID ---------- */
 function aplicarExterno(v) {
-  const local = { vista: E.vista, tuto: E.tuto, iman: E.iman };
+  const local = { vista: E.vista, tuto: E.tuto, iman: E.iman, fijo2d: E.fijo2d, fijo3d: E.fijo3d };
   E = Object.assign(nuevoEstado(), v, local);
   G = construir(E.plano) || construir(PLANO_INICIAL);
   if (!defs().some(d => d.id === E.cur)) E.cur = 'casa';
@@ -432,7 +496,7 @@ function aplicarExterno(v) {
   pintar();
 }
 window.ALQ = {
-  get: () => { const c = Object.assign({}, E); delete c.vista; delete c.tuto; delete c.iman; return c },
+  get: () => { const c = Object.assign({}, E); delete c.vista; delete c.tuto; delete c.iman; delete c.fijo2d; delete c.fijo3d; return c },
   set: v => { if (v && v.plano && v.negs) aplicarExterno(v) },
   onChange: null, onIdView: null
 };
@@ -461,10 +525,11 @@ document.addEventListener('keydown', ev => {
   if (ev.target.closest && ev.target.closest('input,textarea')) return;
   if ((ev.metaKey || ev.ctrlKey) && ['+', '-', '=', '0'].includes(ev.key)) { ev.preventDefault(); return }
   const o = sel && item(sel);
-  if (ev.key === 'Escape') { if (abierta) cerrarHoja(); else seleccionar(null); return }
+  if (ev.key === 'Escape') { if (!$('angPop').hidden) cerrarAng(); else if (abierta) cerrarHoja(); else seleccionar(null); return }
   if (!o) return;
   const p = ev.shiftKey ? 0.1 : 0.01;
   const mov = { ArrowLeft: [-p, 0], ArrowRight: [p, 0], ArrowUp: [0, -p], ArrowDown: [0, p] }[ev.key];
+  if ((mov || ev.key === 'r' || ev.key === 'R') && fijo()) { ev.preventDefault(); avisoFijo(); return }
   if (mov) { ev.preventDefault(); o.x += mov[0]; o.y += mov[1]; guardar(); pintar(); return }
   if (ev.key === 'Delete' || ev.key === 'Backspace') { ev.preventDefault(); $('sbDel').click() }
   if (ev.key === 'r' || ev.key === 'R') rotar(ev.shiftKey ? -90 : 90);
@@ -479,6 +544,7 @@ window.addEventListener('beforeunload', e => { guardar(true); e.preventDefault()
 /* ---------- Tutorial ---------- */
 function tutorial() {
   if (E.vista !== '2d') modo('2d');
+  if (E.fijo2d) { E.fijo2d = false; pintarFijo() }
   v2d.encuadrar();
   const ej = () => neg().items.find(o => o.x != null && o.k !== 'bano' && o.w * o.d > 0.25) || neg().items.find(o => o.x != null);
   const elDe = o => o && document.querySelector(`#v2d [data-uid="${o.uid}"]`);
@@ -486,7 +552,9 @@ function tutorial() {
     { tx: 'Arrastra los muebles con el dedo o el mouse.', el: () => elDe(ej()), anim: 'arrastra' },
     { tx: 'Tócalo para ver sus medidas y cambiarlas.', el: () => elDe(ej()), anim: 'toca', antes: () => { const o = ej(); if (o) seleccionar(o.uid) } },
     { tx: 'Gíralo con estos botones o con el círculo azul.', el: () => $('sbDer'), anim: 'toca' },
-    { tx: 'En 3D ves lo mismo, en el mismo lugar.', el: () => $('b3d'), anim: 'toca', antes: () => seleccionar(null) },
+    { tx: 'O toca aquí y escribe el ángulo: positivo gira antihorario, negativo horario.', el: () => $('bAng'), anim: 'toca' },
+    { tx: 'El candado fija todos los muebles. En 2D empieza abierto para moverlos; en 3D empieza cerrado para que no muevas nada sin querer.', el: () => $('bFijo'), anim: 'toca' },
+    { tx: 'En 3D ves lo mismo, en el mismo lugar. Para mover ahí, abre el candado.', el: () => $('b3d'), anim: 'toca', antes: () => seleccionar(null) },
     { tx: 'Elige un negocio y mira si todo cabe.', el: () => $('titBtn'), anim: 'toca' },
     { tx: 'Agrega más muebles de Sodimac, Promart y otras tiendas.', el: () => $('bAdd'), anim: 'toca' }
   ];

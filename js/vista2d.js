@@ -136,6 +136,7 @@ export function crearVista2D(svg, cb) {
     const o = sel && items.find(i => i.uid === sel && i.x != null);
     if (o) {
       const q = esquinas(o);
+      const fijo = cb.fijo && cb.fijo();
       const cotar = (p1, p2, txt) => {
         const mx = (p1[0] + p2[0]) / 2, my = (p1[1] + p2[1]) / 2;
         const v = [mx - o.x, my - o.y], L = Math.hypot(...v) || 1, off = 14 / s;
@@ -144,7 +145,7 @@ export function crearVista2D(svg, cb) {
       };
       h += cotar(q[0], q[1], `${Math.round(o.w * 100)} cm`) + cotar(q[1], q[2], `${Math.round(o.d * 100)} cm`);
       const rr = 0.32 + 10 / s;
-      h += `<g transform="translate(${f2(o.x)} ${f2(o.y)}) rotate(${(o.rot || 0).toFixed(2)})"><line class="asa" x1="0" y1="${f2(-o.d / 2)}" x2="0" y2="${f2(-o.d / 2 - rr)}"/>` +
+      if (!fijo) h += `<g transform="translate(${f2(o.x)} ${f2(o.y)}) rotate(${(o.rot || 0).toFixed(2)})"><line class="asa" x1="0" y1="${f2(-o.d / 2)}" x2="0" y2="${f2(-o.d / 2 - rr)}"/>` +
         `<circle class="giro" data-giro="1" cx="0" cy="${f2(-o.d / 2 - rr)}" r="${f2(11 / s)}"/>` +
         `<path class="giroi" transform="translate(0 ${f2(-o.d / 2 - rr)}) scale(${f2(1 / s)})" d="M-4.5 1.5a4.7 4.7 0 1 0 1.6-5.2M-3.5-6.2l.6 2.6 2.6-.7"/></g>`;
     }
@@ -157,6 +158,7 @@ export function crearVista2D(svg, cb) {
       if (medir.b) h += `<circle class="reglap" cx="${f2(b[0])}" cy="${f2(b[1])}" r="${f2(5 / s)}"/><text class="reglat" font-size="${f2(fs * 1.1)}" x="${f2((medir.a[0] + b[0]) / 2)}" y="${f2((medir.a[1] + b[1]) / 2 - 14 / s)}">${dd.toFixed(2)} m</text>`;
     }
     capa.innerHTML = h;
+    if (cb.dibujado) cb.dibujado();
   }
 
   // Interacción
@@ -176,6 +178,12 @@ export function crearVista2D(svg, cb) {
     if (medir) { modo = { tipo: 'medir', x: ev.clientX, y: ev.clientY, p }; return }
     if (t.dataset && t.dataset.giro && sel) { modo = { tipo: 'girar', uid: sel }; return }
     const grupo = t.closest && t.closest('[data-uid]');
+    if (grupo && cb.fijo && cb.fijo()) {
+      const u = grupo.dataset.uid;
+      if (sel !== u) cb.seleccionar(u);
+      modo = { tipo: 'pan', x: ev.clientX, y: ev.clientY, c0: [cam.cx, cam.cy], mov: false, sobre: u };
+      return;
+    }
     if (grupo) {
       const o = cb.item(grupo.dataset.uid);
       modo = { tipo: 'mover', uid: o.uid, dx: o.x - p[0], dy: o.y - p[1], x: ev.clientX, y: ev.clientY, mov: false };
@@ -198,6 +206,7 @@ export function crearVista2D(svg, cb) {
     }
     if (modo.tipo === 'pan') {
       if (!modo.mov && Math.hypot(ev.clientX - modo.x, ev.clientY - modo.y) < 4) return;
+      if (!modo.mov && modo.sobre && cb.avisoFijo) cb.avisoFijo();
       modo.mov = true;
       cam.cx = modo.c0[0] - (ev.clientX - modo.x) / cam.s; cam.cy = modo.c0[1] - (ev.clientY - modo.y) / cam.s;
       aplicarCam(); return;
@@ -220,7 +229,7 @@ export function crearVista2D(svg, cb) {
     if (modo.tipo === 'pinch') { if (ptrs.size < 2) modo = null; return }
     if (modo.tipo === 'mover' && modo.mov) cb.arrastrar(modo.uid, null, null, 'fin');
     if (modo.tipo === 'girar') cb.girar(modo.uid, null, 'fin');
-    if (modo.tipo === 'pan' && !modo.mov && ev.type === 'pointerup') cb.seleccionar(null);
+    if (modo.tipo === 'pan' && !modo.mov && !modo.sobre && ev.type === 'pointerup') cb.seleccionar(null);
     if (modo.tipo === 'medir' && ev.type === 'pointerup') {
       const p = modo.p;
       if (!medir.a || medir.b) { medir.a = p; medir.b = null } else medir.b = p;
@@ -245,6 +254,8 @@ export function crearVista2D(svg, cb) {
     encuadrar,
     zoom(k) { cam.s = Math.max(15, Math.min(900, cam.s * k)); aplicarCam() },
     medir(on) { medir = on ? {} : null; dibujar() },
-    get midiendo() { return !!medir }
+    get midiendo() { return !!medir },
+    rectDe(u) { const el = u && capa.querySelector(`[data-uid="${u}"] .cu`); return el ? el.getBoundingClientRect() : null },
+    redibujar: () => dibujar()
   };
 }

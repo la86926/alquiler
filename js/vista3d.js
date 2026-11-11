@@ -161,6 +161,7 @@ export function crearVista3D(cont, cb) {
     toque = { x: ev.clientX, y: ev.clientY, n: (toque && toque.activo ? toque.n + 1 : 1), activo: true };
     if (toque.n > 1) { if (drag) { cb.arrastrar(drag.uid, null, null, 'fin'); drag = null; ctl.enabled = true } return }
     const uid = tocado(ev);
+    if (uid && cb.fijo && cb.fijo()) { toque.uid = uid; return } // fijo: el dedo gira la cámara; un toque solo elige
     if (uid) {
       const o = cb.item(uid); if (!o) return;
       const p = enSuelo(ev, 0);
@@ -180,7 +181,7 @@ export function crearVista3D(cont, cb) {
   const soltar = ev => {
     if (toque) toque.activo = false;
     if (drag) { if (drag.mov) cb.arrastrar(drag.uid, null, null, 'fin'); drag = null; ctl.enabled = true; return }
-    if (toque && ev.type === 'pointerup' && Math.hypot(ev.clientX - toque.x, ev.clientY - toque.y) < 5 && toque.n === 1) cb.seleccionar(null);
+    if (toque && ev.type === 'pointerup' && Math.hypot(ev.clientX - toque.x, ev.clientY - toque.y) < 5 && toque.n === 1) cb.seleccionar(toque.uid || null);
   };
   cont.addEventListener('pointerup', soltar);
   cont.addEventListener('pointercancel', soltar);
@@ -190,7 +191,14 @@ export function crearVista3D(cont, cb) {
   const etiqueta = document.createElement('div'); etiqueta.className = 'et3d'; etiqueta.hidden = true; cont.appendChild(etiqueta);
   function moverEtiqueta() {
     const r = seleccion && mapa.get(seleccion), o = seleccion && cb.item(seleccion);
-    if (!r || !o) { etiqueta.hidden = true; return }
+    const ang = cb.anguloEl;
+    if (!r || !o) { etiqueta.hidden = true; if (ang) ang.style.visibility = 'hidden'; return }
+    if (ang) {
+      const b = new THREE.Vector3(o.x, o.e || 0, -o.y).project(camara);
+      const px = (b.x + 1) / 2 * cont.clientWidth, py = Math.min((1 - b.y) / 2 * cont.clientHeight + 18, cont.clientHeight - 190);
+      ang.style.visibility = b.z > 1 ? 'hidden' : 'visible';
+      ang.style.transform = `translate(${Math.round(px)}px, ${Math.round(py)}px) translate(-50%, 0)`;
+    }
     const v = new THREE.Vector3(o.x, (o.e || 0) + o.h + 0.12, -o.y).project(camara);
     if (v.z > 1) { etiqueta.hidden = true; return }
     etiqueta.hidden = false;
