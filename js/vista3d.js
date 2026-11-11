@@ -1,8 +1,8 @@
 /* Vista 3D (three.js). Mapeo: x del plano → x, altura → y, y del plano → −z. */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { anilloMuros } from './plano.js?v=1.2.2';
-import { construirModelo } from './modelos.js?v=1.2.2';
+import { anilloMuros } from './plano.js?v=1.2.3';
+import { construirModelo } from './modelos.js?v=1.2.3';
 
 const rad = g => g * Math.PI / 180;
 
@@ -21,7 +21,7 @@ export function crearVista3D(cont, cb) {
   const camara = new THREE.PerspectiveCamera(45, 1, 0.05, 300);
   const ctl = new OrbitControls(camara, renderer.domElement);
   ctl.enableDamping = true; ctl.dampingFactor = 0.12; ctl.screenSpacePanning = true;
-  ctl.maxPolarAngle = Math.PI / 2 - 0.02; ctl.minDistance = 0.15; ctl.maxDistance = 40;
+  ctl.maxPolarAngle = Math.PI / 2 - 0.02; ctl.minDistance = 0.08; ctl.maxDistance = 40;
   ctl.zoomToCursor = true;                       // el zoom va hacia donde están los dedos o el mouse
 
   escena.add(new THREE.HemisphereLight('#ffffff', '#ddd6cb', 1.35));
@@ -267,7 +267,7 @@ export function crearVista3D(cont, cb) {
     <div class="pbtn"><button class="pb" data-a="ojos"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Sus ojos</span></button><button class="pb" data-a="salir"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg><span>Salir</span></button></div>
     <p class="phint">Flechas: caminar · un dedo: mirar · dos dedos: alejar</p>
     <button class="pmed" type="button" aria-label="Cambiar la estatura">Persona: ${ESTATURA.toFixed(2)} m</button>
-    <div class="pest" hidden><b>Estatura</b>
+    <div class="pest" hidden><div class="pest-h"><b>Estatura</b><button type="button" class="pest-x" aria-label="Cerrar"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
       <div class="pest-r"><button type="button" data-d="-0.01" aria-label="Menos">−</button><span class="pest-v"></span><button type="button" data-d="0.01" aria-label="Más">+</button></div>
       <div class="pest-c">${[1.5, 1.6, 1.65, 1.7, 1.75, 1.8].map(h => `<button type="button" data-h="${h}">${h.toFixed(2)}</button>`).join('')}</div></div>`;
   cont.appendChild(UI);
@@ -288,6 +288,7 @@ export function crearVista3D(cont, cb) {
     if (cb.fijarEstatura) cb.fijarEstatura(ESTATURA);
   }
   UI.querySelector('.pmed').onclick = () => { pest.hidden = !pest.hidden; if (!pest.hidden) estatura(ESTATURA) };
+  pest.querySelector('.pest-x').onclick = () => { pest.hidden = true };
   pest.querySelectorAll('[data-d]').forEach(b => b.onclick = () => estatura(ESTATURA + +b.dataset.d));
   pest.querySelectorAll('[data-h]').forEach(b => b.onclick = () => estatura(+b.dataset.h));
   const teclas = new Set();
@@ -299,7 +300,7 @@ export function crearVista3D(cont, cb) {
   });
   UI.querySelector('[data-a="salir"]').onclick = () => salir(true);
   UI.querySelector('[data-a="ojos"]').onclick = () => {
-    if (!paseo) return; paseo.ojos = !paseo.ojos; paseo.avatar.visible = !paseo.ojos; paseo.lente = 0; camara.fov = 45; camara.updateProjectionMatrix(); if (!paseo.ojos && paseo.zoom < 0.8) paseo.zoom = 0.8;
+    if (!paseo) return; paseo.ojos = !paseo.ojos; paseo.avatar.visible = !paseo.ojos; paseo.lente = LENTE0; camara.fov = 45; camara.updateProjectionMatrix(); if (!paseo.ojos && paseo.zoom < 0.8) paseo.zoom = 0.8;
     UI.querySelector('[data-a="ojos"] span').textContent = paseo.ojos ? 'Desde atrás' : 'Sus ojos'; sucio = true;
   };
   const MAPA_TECLAS = { ArrowUp: 'f', KeyW: 'f', ArrowDown: 'b', KeyS: 'b', ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r' };
@@ -310,10 +311,11 @@ export function crearVista3D(cont, cb) {
   // un dedo: mirar; dos dedos (o la rueda / el trackpad): acercar o alejar la cámara
   let mira = null, pinza = null;
   const dedos = new Map();
-  const ZMIN = 0.12, ZMAX = 16;   // por debajo de 0.8 m la cámara ya no se acerca más: cierra el lente (zoom fuerte)
+  const ZMIN = 0.06, ZMAX = 16;
+  const LENTE0 = 0.6;   // «Sus ojos» empieza un poco detrás de la cabeza: se ven la nuca y los hombros   // por debajo de 0.8 m la cámara ya no se acerca más: cierra el lente (zoom fuerte)
   const acercar = k => {
     if (!paseo) return;
-    if (paseo.ojos) paseo.lente = Math.max(-1, Math.min(1, paseo.lente + Math.log(k) * 0.9));   // >0: se ve más (sale un poco detrás de la cabeza); <0: acerca
+    if (paseo.ojos) paseo.lente = Math.max(-1.2, Math.min(1.4, paseo.lente + Math.log(k) * 0.9));   // >0: se ve más (sale un poco detrás de la cabeza); <0: acerca
     else paseo.zoom = Math.max(ZMIN, Math.min(ZMAX, paseo.zoom * k));
     UI.classList.add('usado');
   };
@@ -367,6 +369,14 @@ export function crearVista3D(cont, cb) {
     rayoVista.set(desde, dir); rayoVista.far = Math.max(0, dist - 0.35);
     const cajas = []; for (const r of mapa.values()) cajas.push(r.caja);
     const ahora = new Set(rayoVista.intersectObjects(cajas, false).map(h => h.object.userData.uid));
+    // también lo que está pegado a la cámara (si la cámara queda dentro del baño, por ejemplo)
+    const cx = desde.x, cy = -desde.z, cz = desde.y;
+    for (const o of cb.items ? cb.items() : []) {
+      if (o.x == null || cz > (o.e || 0) + o.h + 0.25) continue;
+      const c = Math.cos(rad(o.rot || 0)), sn = Math.sin(rad(o.rot || 0)), dx = cx - o.x, dy = cy - o.y;
+      const lx = dx * c + dy * sn, ly = -dx * sn + dy * c;
+      if (Math.abs(lx) < o.w / 2 + 0.4 && Math.abs(ly) < o.d / 2 + 0.4) ahora.add(o.uid);
+    }
     for (const uid of new Set([...ocultos, ...ahora])) { const r = mapa.get(uid); if (r) r.grupo.children[0].visible = !ahora.has(uid) }
     ocultos = ahora;
   }
@@ -377,7 +387,7 @@ export function crearVista3D(cont, cb) {
     UI.querySelector('.pmed').textContent = `Persona: ${ESTATURA.toFixed(2)} m`; pest.hidden = true;
     const avatar = avatarNuevo();
     escena.add(avatar);
-    paseo = { x: (g.A[0] + g.B[0]) / 2, y: -0.75, yaw: 0, pitch: -0.05, ojos: false, lente: 0, zoom: innerWidth < 600 ? 2.6 : 1.9, avatar, t: performance.now() };
+    paseo = { x: (g.A[0] + g.B[0]) / 2, y: -0.75, yaw: 0, pitch: -0.05, ojos: false, lente: LENTE0, zoom: innerWidth < 600 ? 2.6 : 1.9, avatar, t: performance.now() };
     ctl.enabled = false; UI.hidden = false; UI.classList.remove('usado'); UI.querySelector('[data-a="ojos"] span').textContent = 'Sus ojos';
     if (cb.paseo) cb.paseo(true);
     sucio = true;
@@ -408,13 +418,14 @@ export function crearVista3D(cont, cb) {
     if (paseo.ojos) {
       /* «Sus ojos»: al alejar con dos dedos la vista se abre y la cámara sale un poco detrás de la cabeza
          (se ven la nuca y los hombros); al acercar, el lente acerca como unos binoculares */
-      const L = paseo.lente, atras = Math.max(0, L) * 0.75;
-      const fov = L >= 0 ? 45 + L * 22 : 45 * (1 + L * 0.86);
+      const L = paseo.lente, atras = Math.max(0, L) * 1.5;
+      const fov = L >= 0 ? 45 + L * 16 : 45 * Math.exp(L * 2);
       if (Math.abs(camara.fov - fov) > 0.01) { camara.fov = fov; camara.updateProjectionMatrix() }
       paseo.avatar.visible = atras > 0.12;
-      const ccx = paseo.x - fx * atras, ccy = paseo.y - fy * atras;
-      camara.position.set(ccx, ojos() + Math.max(0, L) * 0.14, -ccy);
-      for (const mu of g.muros) if (murosPor[mu.id]) murosPor[mu.id].visible = (ccx - mu.p[0]) * mu.out[0] + (ccy - mu.p[1]) * mu.out[1] < -0.02;
+      const lado = Math.min(1, Math.max(0, L) / LENTE0) * 0.06;        // apenas a la derecha: la cabeza queda abajo, casi al centro
+      const ccx = paseo.x - fx * atras + fy * lado, ccy = paseo.y - fy * atras - fx * lado;
+      camara.position.set(ccx, ojos() + Math.max(0, L) * 0.4, -ccy);
+      for (const mu of g.muros) if (murosPor[mu.id]) murosPor[mu.id].visible = atras < 0.12 || (ccx - mu.p[0]) * mu.out[0] + (ccy - mu.p[1]) * mu.out[1] < -0.4;
       if (atras > 0.12) despejar(camara.position, new THREE.Vector3(paseo.x, ESTATURA - 0.1, -paseo.y)); else if (ocultos.size) mostrarTodo();
     } else {
       // detrás del muñequito; al alejarse con dos dedos sube por encima de las paredes y se ve todo el plano
@@ -425,15 +436,15 @@ export function crearVista3D(cont, cb) {
       camara.position.set(paseo.x - fx * d, alto(d), -(paseo.y - fy * d));
       // la pared que queda entre la cámara y el muñequito se vuelve invisible (por ejemplo, al girar en el fondo)
       const ccx = paseo.x - fx * d, ccy = paseo.y - fy * d;
-      for (const mu of g.muros) if (murosPor[mu.id]) murosPor[mu.id].visible = (ccx - mu.p[0]) * mu.out[0] + (ccy - mu.p[1]) * mu.out[1] < -0.02;
+      for (const mu of g.muros) if (murosPor[mu.id]) murosPor[mu.id].visible = (ccx - mu.p[0]) * mu.out[0] + (ccy - mu.p[1]) * mu.out[1] < -0.4;
       despejar(camara.position, new THREE.Vector3(paseo.x, ESTATURA * 0.75, -paseo.y));
       const adelante = Math.max(0.3, 2.5 - Math.max(0, d - 1.9) * 0.45);
       camara.lookAt(paseo.x + fx * adelante, 1.05 + Math.tan(paseo.pitch) * 2.5, -(paseo.y + fy * adelante));
       renderer.render(escena, camara); sucio = false;
       return;
     }
-    const ly = ojos() + Math.tan(paseo.pitch) * 2.5;
-    camara.lookAt(paseo.x + fx * 2.5, ly, -(paseo.y + fy * 2.5));
+    const ly = ojos() + Math.tan(paseo.pitch) * 2.5, ld = paseo.ojos ? Math.min(1, Math.max(0, paseo.lente) / LENTE0) * 0.06 : 0;
+    camara.lookAt(paseo.x + fx * 2.5 + fy * ld, ly, -(paseo.y + fy * 2.5 - fx * ld));
     renderer.render(escena, camara); sucio = false;
   }
 

@@ -291,7 +291,7 @@ body.fijo-on .pill .cand{display:block}
 body.ter-on #hTer{left:var(--tx,12px);top:var(--ty,72px);right:auto;bottom:auto;width:min(360px,calc(100vw - 24px));max-height:min(70vh,600px);
   border-radius:20px;box-shadow:0 18px 50px rgba(10,15,20,.22),0 2px 8px rgba(10,15,20,.08);padding-top:8px;animation:flota .18s ease-out}
 @keyframes flota{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
-body.ter-on #hTer .h-top{cursor:grab;touch-action:none;padding-top:10px;position:relative}
+body.ter-on #hTer .h-top{cursor:grab;touch-action:none}
 body.ter-on #hTer.arrastra .h-top{cursor:grabbing}
 body.ter-on #hTer .h-top::before{content:"";position:absolute;left:50%;top:0;width:38px;height:5px;margin-left:-19px;border-radius:3px;background:var(--faint)}
 body.ter-on .barra,body.ter-on .selbar,body.ter-on .bang{display:none}
@@ -328,3 +328,9 @@ body.paseo-on .barra,body.paseo-on .selbar,body.paseo-on .bang,body.paseo-on .fi
 .paseo .pest-c{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .paseo .pest-c button{height:34px;border:0;border-radius:10px;background:var(--faint);color:var(--fg);font:700 13px var(--font);cursor:pointer}
 .paseo .pest-c button.on{background:var(--blue);color:#fff}
+/* La barra con la X de cerrar queda fija arriba aunque la ventana tenga scroll */
+.hoja .h-top{position:sticky;top:-16px;z-index:3;background:var(--bg);margin:-16px calc(-1 * max(18px,env(safe-area-inset-right,0px))) 0 calc(-1 * max(18px,env(safe-area-inset-left,0px)));padding:16px max(18px,env(safe-area-inset-right,0px)) 8px max(18px,env(safe-area-inset-left,0px))}
+body.ter-on #hTer .h-top{top:-8px;margin-top:-8px;padding-top:18px}
+.paseo .pest-h{display:flex;align-items:center;justify-content:space-between}
+.paseo .pest-x{width:30px;height:30px;border:0;border-radius:50%;background:var(--faint);display:grid;place-items:center;cursor:pointer}
+.paseo .pest-x svg{width:13px;height:13px;fill:none;stroke:var(--fg);stroke-width:1.8;stroke-linecap:round}

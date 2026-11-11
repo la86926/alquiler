@@ -81,6 +81,19 @@ function vitrina(g, w, d, h, col, frio) {
   if (frio) caja(g, w, 0.04, d, 0, h - 0.05, 0, mat('#ffffff', { emissive: '#dbeeff', emissiveIntensity: 0.4 }));
 }
 
+/* Letrero discreto «Baño» en el frente del baño */
+let texBano = null;
+function letreroBano(g, x, y, z) {
+  if (!texBano) {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 80; const k = c.getContext('2d');
+    k.fillStyle = '#f7f6f2'; k.fillRect(0, 0, 256, 80);
+    k.fillStyle = '#9aa3ad'; k.font = '600 40px "Plus Jakarta Sans", system-ui, sans-serif'; k.textAlign = 'center'; k.textBaseline = 'middle';
+    k.fillText('Baño', 128, 42);
+    texBano = new THREE.CanvasTexture(c); texBano.colorSpace = THREE.SRGBColorSpace; texBano.anisotropy = 4;
+  }
+  const p = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.094), new THREE.MeshBasicMaterial({ map: texBano, toneMapped: false }));
+  p.position.set(x, y, z); g.add(p);
+}
 export function construirModelo(o) {
   const g = new THREE.Group();
   const w = o.w, d = o.d, h = o.h, c = o.c || '#dddddd', m = mat(c);
@@ -287,6 +300,7 @@ export function construirModelo(o) {
       caja(g, pw, h - 2.1, t, w / 2 - t - pw / 2, 2.1, d / 2 - t / 2, pared);
       caja(g, pw - 0.02, 2.08, 0.04, w / 2 - t - pw / 2, 0, d / 2 - t / 2, mat('#e8dccb'));
       caja(g, w - 2 * t, 0.006, d - 2 * t, 0, 0, 0, mat('#e3eef3'));
+      letreroBano(g, -w / 2 + t + resto / 2, Math.min(2.3, h - 0.25), d / 2 + 0.004);
       inodoro(g, -w / 2 + t + 0.25, 0, -d / 2 + t + 0.33, 0.37, 0.66, 0.71);
       lavatorio(g, w / 2 - t - 0.205, 0, -d / 2 + t + 0.4, 0.51, 0.41, 0.83, -Math.PI / 2);
       break;
