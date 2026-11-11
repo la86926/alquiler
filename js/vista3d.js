@@ -1,8 +1,8 @@
 /* Vista 3D (three.js). Mapeo: x del plano → x, altura → y, y del plano → −z. */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { anilloMuros } from './plano.js?v=1.1.9';
-import { construirModelo } from './modelos.js?v=1.1.9';
+import { anilloMuros } from './plano.js?v=1.2.0';
+import { construirModelo } from './modelos.js?v=1.2.0';
 
 const rad = g => g * Math.PI / 180;
 
@@ -21,7 +21,8 @@ export function crearVista3D(cont, cb) {
   const camara = new THREE.PerspectiveCamera(45, 1, 0.05, 300);
   const ctl = new OrbitControls(camara, renderer.domElement);
   ctl.enableDamping = true; ctl.dampingFactor = 0.12; ctl.screenSpacePanning = true;
-  ctl.maxPolarAngle = Math.PI / 2 - 0.02; ctl.minDistance = 0.6; ctl.maxDistance = 40;
+  ctl.maxPolarAngle = Math.PI / 2 - 0.02; ctl.minDistance = 0.15; ctl.maxDistance = 40;
+  ctl.zoomToCursor = true;                       // el zoom va hacia donde están los dedos o el mouse
 
   escena.add(new THREE.HemisphereLight('#ffffff', '#ddd6cb', 1.35));
   const sol = new THREE.DirectionalLight('#fff6ea', 1.5);
@@ -270,7 +271,7 @@ export function crearVista3D(cont, cb) {
   });
   UI.querySelector('[data-a="salir"]').onclick = () => salir(true);
   UI.querySelector('[data-a="ojos"]').onclick = () => {
-    if (!paseo) return; paseo.ojos = !paseo.ojos; paseo.avatar.visible = !paseo.ojos;
+    if (!paseo) return; paseo.ojos = !paseo.ojos; paseo.avatar.visible = !paseo.ojos; camara.fov = 45; camara.updateProjectionMatrix(); if (!paseo.ojos && paseo.zoom < 0.8) paseo.zoom = 0.8;
     UI.querySelector('[data-a="ojos"] span').textContent = paseo.ojos ? 'Desde atrás' : 'Sus ojos'; sucio = true;
   };
   const MAPA_TECLAS = { ArrowUp: 'f', KeyW: 'f', ArrowDown: 'b', KeyS: 'b', ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r' };
@@ -281,10 +282,10 @@ export function crearVista3D(cont, cb) {
   // un dedo: mirar; dos dedos (o la rueda / el trackpad): acercar o alejar la cámara
   let mira = null, pinza = null;
   const dedos = new Map();
-  const ZMIN = 0.6, ZMAX = 16;
+  const ZMIN = 0.12, ZMAX = 16;   // por debajo de 0.8 m la cámara ya no se acerca más: cierra el lente (zoom fuerte)
   const acercar = k => {
     if (!paseo) return;
-    if (paseo.ojos) { camara.fov = Math.max(28, Math.min(80, camara.fov * k)); camara.updateProjectionMatrix() }
+    if (paseo.ojos) { camara.fov = Math.max(6, Math.min(80, camara.fov * k)); camara.updateProjectionMatrix() }
     else paseo.zoom = Math.max(ZMIN, Math.min(ZMAX, paseo.zoom * k));
     UI.classList.add('usado');
   };
@@ -366,7 +367,9 @@ export function crearVista3D(cont, cb) {
       camara.position.set(paseo.x, OJOS, -paseo.y);
     } else {
       // detrás del muñequito; al alejarse con dos dedos sube por encima de las paredes y se ve todo el plano
-      let d = paseo.zoom;
+      let d = Math.max(0.8, paseo.zoom);
+      const fov = 45 * Math.min(1, paseo.zoom / 0.8);
+      if (Math.abs(camara.fov - fov) > 0.01) { camara.fov = fov; camara.updateProjectionMatrix() }
       const alto = z => 2.05 + Math.max(0, z - 1.9) * 0.62 + Math.max(0, 1.9 - z) * 0.25;
       const sobreMuros = z => alto(z) > (plano ? plano.alto : 2.8) * altoMuros + 0.25;
       while (d > 0.45 && !sobreMuros(d) && !camLibre(paseo.x - fx * d, paseo.y - fy * d)) d -= 0.1;
