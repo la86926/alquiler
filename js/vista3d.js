@@ -1,8 +1,8 @@
 /* Vista 3D (three.js). Mapeo: x del plano → x, altura → y, y del plano → −z. */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { anilloMuros } from './plano.js?v=1.1.7';
-import { construirModelo } from './modelos.js?v=1.1.7';
+import { anilloMuros } from './plano.js?v=1.1.8';
+import { construirModelo } from './modelos.js?v=1.1.8';
 
 const rad = g => g * Math.PI / 180;
 
@@ -257,7 +257,8 @@ export function crearVista3D(cont, cb) {
   const flecha = (d, rot) => `<button class="pf" data-m="${d}" aria-label="${{ f: 'Avanzar', b: 'Retroceder', l: 'Girar a la izquierda', r: 'Girar a la derecha' }[d]}"><svg viewBox="0 0 24 24" style="transform:rotate(${rot}deg)"><path d="M12 5l7 9H5z"/></svg></button>`;
   UI.innerHTML = `<div class="pad">${flecha('f', 0)}${flecha('l', -90)}${flecha('r', 90)}${flecha('b', 180)}</div>
     <div class="pbtn"><button class="pb" data-a="ojos"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Sus ojos</span></button><button class="pb" data-a="salir"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg><span>Salir</span></button></div>
-    <p class="phint">Usa las flechas para caminar. Arrastra para mirar.</p>`;
+    <p class="phint">Flechas: caminar · un dedo: mirar · dos dedos: alejar</p>
+    <span class="pmed">Persona: 1.70 m</span>`;
   cont.appendChild(UI);
   const teclas = new Set();
   UI.querySelectorAll('.pf').forEach(b => {
@@ -276,16 +277,38 @@ export function crearVista3D(cont, cb) {
   addEventListener('keyup', ev => { if (MAPA_TECLAS[ev.code]) teclas.delete(MAPA_TECLAS[ev.code]) }, true);
   addEventListener('blur', () => teclas.clear());
   // mirar arrastrando
-  let mira = null;
-  renderer.domElement.addEventListener('pointerdown', ev => { if (!paseo) return; mira = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, yaw: paseo.yaw, pitch: paseo.pitch }; try { renderer.domElement.setPointerCapture(ev.pointerId) } catch (e) {} });
+  // un dedo: mirar; dos dedos (o la rueda / el trackpad): acercar o alejar la cámara
+  let mira = null, pinza = null;
+  const dedos = new Map();
+  const ZMIN = 0.6, ZMAX = 16;
+  const acercar = k => {
+    if (!paseo) return;
+    if (paseo.ojos) { camara.fov = Math.max(28, Math.min(80, camara.fov * k)); camara.updateProjectionMatrix() }
+    else paseo.zoom = Math.max(ZMIN, Math.min(ZMAX, paseo.zoom * k));
+    UI.classList.add('usado');
+  };
+  renderer.domElement.addEventListener('pointerdown', ev => {
+    if (!paseo) return;
+    dedos.set(ev.pointerId, [ev.clientX, ev.clientY]);
+    try { renderer.domElement.setPointerCapture(ev.pointerId) } catch (e) {}
+    if (dedos.size === 2) { const [a, b] = [...dedos.values()]; pinza = { d0: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, ult: 1 }; mira = null; return }
+    if (dedos.size === 1) mira = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, yaw: paseo.yaw, pitch: paseo.pitch };
+  });
   renderer.domElement.addEventListener('pointermove', ev => {
-    if (!paseo || !mira || ev.pointerId !== mira.id) return;
+    if (!paseo || !dedos.has(ev.pointerId)) return;
+    dedos.set(ev.pointerId, [ev.clientX, ev.clientY]);
+    if (pinza && dedos.size >= 2) {
+      const [a, b] = [...dedos.values()], f = pinza.d0 / (Math.hypot(a[0] - b[0], a[1] - b[1]) || 1);
+      acercar(f / pinza.ult); pinza.ult = f; return;
+    }
+    if (!mira || ev.pointerId !== mira.id) return;
     paseo.yaw = mira.yaw + (ev.clientX - mira.x) * 0.006;
     paseo.pitch = Math.max(-0.6, Math.min(0.5, mira.pitch - (ev.clientY - mira.y) * 0.004));
     UI.classList.add('usado');
   });
-  const finMira = ev => { if (mira && ev.pointerId === mira.id) mira = null };
+  const finMira = ev => { dedos.delete(ev.pointerId); if (dedos.size < 2) pinza = null; if (mira && ev.pointerId === mira.id) mira = null };
   renderer.domElement.addEventListener('pointerup', finMira); renderer.domElement.addEventListener('pointercancel', finMira);
+  renderer.domElement.addEventListener('wheel', ev => { if (!paseo) return; ev.preventDefault(); ev.stopPropagation(); acercar(Math.exp(ev.deltaY * (ev.ctrlKey ? 0.01 : 0.0015))) }, { passive: false, capture: true });
 
   const RADIO = 0.2;
   function libre(x, y) {
@@ -312,14 +335,15 @@ export function crearVista3D(cont, cb) {
     const visera = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.08), new THREE.MeshStandardMaterial({ color: '#2f6fdb' }));
     visera.position.set(0, 1.62, -0.12); avatar.add(visera);
     escena.add(avatar);
-    paseo = { x: (g.A[0] + g.B[0]) / 2, y: -0.75, yaw: 0, pitch: -0.05, ojos: false, avatar, t: performance.now() };
+    paseo = { x: (g.A[0] + g.B[0]) / 2, y: -0.75, yaw: 0, pitch: -0.05, ojos: false, zoom: innerWidth < 600 ? 2.6 : 1.9, avatar, t: performance.now() };
     ctl.enabled = false; UI.hidden = false; UI.classList.remove('usado'); UI.querySelector('[data-a="ojos"] span').textContent = 'Sus ojos';
     if (cb.paseo) cb.paseo(true);
     sucio = true;
   }
   function salir(volver) {
     if (!paseo) return;
-    escena.remove(paseo.avatar); paseo = null; teclas.clear(); mira = null;
+    escena.remove(paseo.avatar); paseo = null; teclas.clear(); mira = null; pinza = null; dedos.clear();
+    if (camara.fov !== 45) { camara.fov = 45; camara.updateProjectionMatrix() }
     ctl.enabled = true; UI.hidden = true;
     if (cb.paseo) cb.paseo(false);
     if (volver) vista('iso');
@@ -340,11 +364,18 @@ export function crearVista3D(cont, cb) {
     if (paseo.ojos) {
       camara.position.set(paseo.x, 1.58, -paseo.y);
     } else {
-      let d = 1.9;                                        // detrás del muñequito, sin meterse en la pared
-      while (d > 0.45 && !camLibre(paseo.x - fx * d, paseo.y - fy * d)) d -= 0.1;
-      camara.position.set(paseo.x - fx * d, 2.05 + (1.9 - d) * 0.25, -(paseo.y - fy * d));
+      // detrás del muñequito; al alejarse con dos dedos sube por encima de las paredes y se ve todo el plano
+      let d = paseo.zoom;
+      const alto = z => 2.05 + Math.max(0, z - 1.9) * 0.62 + Math.max(0, 1.9 - z) * 0.25;
+      const sobreMuros = z => alto(z) > (plano ? plano.alto : 2.8) * altoMuros + 0.25;
+      while (d > 0.45 && !sobreMuros(d) && !camLibre(paseo.x - fx * d, paseo.y - fy * d)) d -= 0.1;
+      camara.position.set(paseo.x - fx * d, alto(d), -(paseo.y - fy * d));
+      const adelante = Math.max(0.3, 2.5 - Math.max(0, d - 1.9) * 0.45);
+      camara.lookAt(paseo.x + fx * adelante, 1.05 + Math.tan(paseo.pitch) * 2.5, -(paseo.y + fy * adelante));
+      renderer.render(escena, camara); sucio = false;
+      return;
     }
-    const ly = (paseo.ojos ? 1.58 : 1.05) + Math.tan(paseo.pitch) * 2.5;
+    const ly = 1.58 + Math.tan(paseo.pitch) * 2.5;
     camara.lookAt(paseo.x + fx * 2.5, ly, -(paseo.y + fy * 2.5));
     renderer.render(escena, camara); sucio = false;
   }
