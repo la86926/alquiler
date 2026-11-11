@@ -1,10 +1,10 @@
 /* Vista 3D (three.js). Mapeo: x del plano → x, altura → y, y del plano → −z. */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { anilloMuros } from './plano.js?v=1.3.0';
-import { construirModelo } from './modelos.js?v=1.3.0';
+import { anilloMuros } from './plano.js?v=1.3.1';
+import { construirModelo } from './modelos.js?v=1.3.1';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { texPiso, texPared, texAsfalto, texVereda, uvMundo } from './realista.js?v=1.3.0';
+import { texPiso, texPared, texAsfalto, texVereda, uvMundo } from './realista.js?v=1.3.1';
 
 const rad = g => g * Math.PI / 180;
 

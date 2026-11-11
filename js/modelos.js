@@ -1,7 +1,7 @@
 /* Modelos 3D de los muebles, armados con piezas simples para que la caja total mida exactamente
    ancho × fondo × alto. Ejes locales: x = ancho, y = alto, z = fondo; el frente mira hacia +z. */
 import * as THREE from 'three';
-import { realzar, productosReales, plantaReal } from './realista.js?v=1.3.0';
+import { realzar, productosReales, plantaReal } from './realista.js?v=1.3.1';
 
 let REAL = false;   // 4D: acabados reales
 
