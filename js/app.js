@@ -1,9 +1,9 @@
-import { CAT, NEGOCIOS, FUENTES, COL } from './catalogo.js?v=1.1.4';
-import { PLANO_INICIAL, ETQ, esCroquisViejo, colocar, construir, revisar, iman, acomodar, buscarLugar, areaOcupada, distanciaMuros } from './plano.js?v=1.1.4';
-import { crearVista2D } from './vista2d.js?v=1.1.4';
-import { generarDXF } from './dxf.js?v=1.1.4';
+import { CAT, NEGOCIOS, FUENTES, COL } from './catalogo.js?v=1.1.5';
+import { PLANO_INICIAL, ETQ, colocar, construir, revisar, iman, acomodar, buscarLugar, areaOcupada, distanciaMuros } from './plano.js?v=1.1.5';
+import { crearVista2D } from './vista2d.js?v=1.1.5';
+import { generarDXF } from './dxf.js?v=1.1.5';
 
-const VERSION = '1.1.4';
+const VERSION = '1.1.5';
 const LS = 'alq-estado-v1';
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -35,35 +35,25 @@ const IC = {
 const icono = k => `<svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${IC[k] || IC.casa}</svg>`;
 
 /* ---------- Estado ---------- */
-function nuevoEstado() { return { v: 1, ter: 3, plano: Object.assign({}, PLANO_INICIAL), cur: 'casa', negs: {}, extra: [], vista: '2d', iman: true, fijo2d: false, fijo3d: true, tuto: 0, t: Date.now() } }
+function nuevoEstado() { return { v: 1, ter: 4, plano: Object.assign({}, PLANO_INICIAL), cur: 'casa', negs: {}, extra: [], vista: '2d', iman: true, fijo2d: false, fijo3d: true, tuto: 0, t: Date.now() } }
 /* Terreno nuevo MBCN (la mitad derecha del croquis): si lo guardado tiene el croquis completo,
    se cambia el terreno y se vuelven a ubicar todos los muebles. */
 function migrar(e) {
-  if (!e || (e.ter || 1) >= 3) return false;
-  const antes = e.ter || 1;
-  e.ter = 3;
-  // v1.1.4: distribuciones hechas a mano para MBCN; los negocios de la web se vuelven a armar
-  if (antes === 2 && mismoPlano(e.plano)) {
-    const propios = new Set((e.extra || []).map(d => d.id));
-    for (const id of Object.keys(e.negs || {})) if (!propios.has(id)) delete e.negs[id];
-    e.t = Date.now();
-    return true;
-  }
-  if (!esCroquisViejo(e.plano)) return false;           // medidas propias del usuario: no se tocan
-  for (const k of ['AB', 'BC', 'CD', 'DA', 'AC']) e.plano[k] = PLANO_INICIAL[k];
+  if (!e || (e.ter || 1) >= 4) return false;
+  // v1.1.5: se empieza de nuevo con el terreno MBCN y la distribución propuesta de cada negocio
+  e.ter = 4;
+  e.plano = Object.assign({}, PLANO_INICIAL, { muro: e.plano?.muro || PLANO_INICIAL.muro, alto: e.plano?.alto || PLANO_INICIAL.alto });
   const g = construir(e.plano);
   const propios = new Set((e.extra || []).map(d => d.id));
+  const reacomodar = items => { for (const o of items) { o.x = null; o.y = null; o.rot = 0 } acomodar(g, items); return items.filter(o => o.x != null) };
   for (const id of Object.keys(e.negs || {})) {
-    if (!propios.has(id)) { delete e.negs[id]; continue }   // los negocios de la web vuelven a su propuesta, ya acomodada
-    const items = e.negs[id].items || [];
-    for (const o of items) { o.x = null; o.y = null; o.rot = 0 }
-    acomodar(g, items);                                      // los que no entren quedan en la lista como «No entró»
+    if (!propios.has(id)) { delete e.negs[id]; continue }   // los negocios de la web vuelven a su propuesta
+    e.negs[id].items = reacomodar(e.negs[id].items || []); // los propios: se reubican y se quita lo que no entra
   }
-  for (const d of e.extra || []) if (d.base) { for (const o of d.base) { o.x = null; o.y = null; o.rot = 0 } acomodar(g, d.base) }
+  for (const d of e.extra || []) if (d.base) d.base = reacomodar(d.base);
   e.t = Date.now();
   return true;
 }
-const mismoPlano = p => !!p && ['AB', 'BC', 'CD', 'DA', 'AC'].every(k => Math.abs((p[k] || 0) - PLANO_INICIAL[k]) < 0.005);
 let migrado = false;
 function cargar() {
   try { const e = JSON.parse(localStorage.getItem(LS)); if (e && e.plano && e.negs) { migrado = migrar(e); return Object.assign(nuevoEstado(), e) } } catch (e) {}
@@ -260,7 +250,7 @@ async function modo(m) {
 }
 async function asegurar3D() {
   if (v3d) return v3d;
-  if (!cargando3d) cargando3d = import('./vista3d.js?v=1.1.4').then(m => {
+  if (!cargando3d) cargando3d = import('./vista3d.js?v=1.1.5').then(m => {
     v3d = m.crearVista3D($('v3d'), { item, seleccionar: u => seleccionar(u), arrastrar, fijo: () => fijo(), anguloEl: $('bAng') });
     v3d.armarCasa(G, E.plano); v3d.mostrar(true); v3d.vista('iso', false);
     return v3d;
@@ -509,9 +499,18 @@ Object.keys(TER).concat('tMu').forEach(i => $(i).addEventListener('input', () =>
   $('tErr').textContent = '';
   E.plano = p; G = geo; datosTer();
   clearTimeout(tTer);
-  tTer = setTimeout(() => { if (v3d) v3d.armarCasa(G, E.plano); v2d.encuadrar(); pintar(); guardar() }, 200);
+  tTer = setTimeout(() => { reubicarFuera(); if (v3d) v3d.armarCasa(G, E.plano); v2d.encuadrar(); pintar(); guardar() }, 400);
 }));
-$('tRest').onclick = () => { E.plano = Object.assign({}, PLANO_INICIAL); G = construir(E.plano); if (v3d) v3d.armarCasa(G, E.plano); llenarTer(); v2d.encuadrar(); pintar(); guardar() };
+/* Si el terreno cambia, lo que quedó fuera de las paredes se vuelve a ubicar (en todos los negocios) */
+function reubicarFuera() {
+  for (const N of Object.values(E.negs)) {
+    const r = revisar(G, N.items), fuera = N.items.filter(o => r[o.uid] === 'fuera');
+    if (!fuera.length) continue;
+    for (const o of fuera) { o.x = null; o.y = null; o.rot = 0 }
+    acomodar(G, fuera, N.items.filter(o => !fuera.includes(o)));
+  }
+}
+$('tRest').onclick = () => { E.plano = Object.assign({}, PLANO_INICIAL); G = construir(E.plano); reubicarFuera(); if (v3d) v3d.armarCasa(G, E.plano); llenarTer(); v2d.encuadrar(); pintar(); guardar() };
 
 /* Exportar */
 function bajar(nombre, datos, tipo) {
@@ -638,7 +637,7 @@ $('bIman').setAttribute('aria-pressed', E.iman);
 neg();
 pintar();
 modo(E.vista === '3d' ? '3d' : '2d');
-if (migrado) { guardar(true); setTimeout(() => toast('Terreno MBCN: los muebles de cada negocio se volvieron a ubicar.'), 600) }
+if (migrado) { guardar(true); setTimeout(() => toast('Terreno MBCN: cada negocio empezó de nuevo con muebles que caben.'), 600) }
 import('../sync.js?v=' + VERSION).catch(() => {});
 if (!E.tuto) setTimeout(tutorial, 450);
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => v3d && v3d.tema());

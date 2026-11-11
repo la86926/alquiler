@@ -1,5 +1,5 @@
 /* Exporta el plano a DXF (AutoCAD R12, unidades en metros). AutoCAD lo abre y lo puede guardar como DWG. */
-import { anilloMuros, esquinas, ETQ } from './plano.js?v=1.1.4';
+import { anilloMuros, esquinas, ETQ } from './plano.js?v=1.1.5';
 
 const txt = s => String(s).replace(/ñ/g, 'n').replace(/Ñ/g, 'N').replace(/×/g, 'x').replace(/Ø/g, 'D').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]/g, '');
 const n = v => (Math.round(v * 10000) / 10000).toString();
