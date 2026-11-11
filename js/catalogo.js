@@ -31,7 +31,7 @@ const I = (n, k, w, d, h, c, f, extra = {}) => Object.assign({ n, k, w, d, h, e:
 export const CAT = {
   // Generales
   bano: I('Baño (inodoro + lavatorio)', 'bano', 120, 140, 280, 'blanco', 'tipica', { g: 'General', fijo: 1, nota: 'Tabiques de 10 cm. Inodoro Trébol Pro 36.5×66×71 y lavatorio Savona Lux 50.5×41×82.5 (fichas Celima Trébol).' }),
-  persona: I('Persona de referencia', 'persona', 50, 30, 170, 'lila', 'tipica', { g: 'General' }),
+  persona: I('Persona de referencia', 'persona', 50, 30, 165, 'lila', 'tipica', { g: 'General' }),
   planta: I('Planta en macetero', 'planta', 40, 40, 110, 'salvia', 'tipica', { g: 'General' }),
   tacho: I('Tacho de basura', 'tacho', 35, 35, 65, 'gris', 'tipica', { g: 'General' }),
   dispensador: I('Dispensador de agua', 'dispensador', 32, 32, 100, 'azul', 'tipica', { g: 'General' }),

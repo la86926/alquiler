@@ -1,8 +1,8 @@
 /* Vista 3D (three.js). Mapeo: x del plano → x, altura → y, y del plano → −z. */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { anilloMuros } from './plano.js?v=1.1.8';
-import { construirModelo } from './modelos.js?v=1.1.8';
+import { anilloMuros } from './plano.js?v=1.1.9';
+import { construirModelo } from './modelos.js?v=1.1.9';
 
 const rad = g => g * Math.PI / 180;
 
@@ -252,13 +252,14 @@ export function crearVista3D(cont, cb) {
   /* ---------- Caminar por dentro: un muñequito que entra desde la vereda ----------
      Flechas (o teclado) para avanzar y girar; arrastrar el dedo para mirar alrededor.
      La cámara va detrás del muñequito o «con sus ojos». No atraviesa paredes ni muebles. */
+  const ESTATURA = 1.65, OJOS = 1.53;                   // muñequito de 1.65 m; los ojos, 12 cm debajo de la coronilla
   let paseo = null;
   const UI = document.createElement('div'); UI.className = 'paseo'; UI.hidden = true;
   const flecha = (d, rot) => `<button class="pf" data-m="${d}" aria-label="${{ f: 'Avanzar', b: 'Retroceder', l: 'Girar a la izquierda', r: 'Girar a la derecha' }[d]}"><svg viewBox="0 0 24 24" style="transform:rotate(${rot}deg)"><path d="M12 5l7 9H5z"/></svg></button>`;
   UI.innerHTML = `<div class="pad">${flecha('f', 0)}${flecha('l', -90)}${flecha('r', 90)}${flecha('b', 180)}</div>
     <div class="pbtn"><button class="pb" data-a="ojos"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Sus ojos</span></button><button class="pb" data-a="salir"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg><span>Salir</span></button></div>
     <p class="phint">Flechas: caminar · un dedo: mirar · dos dedos: alejar</p>
-    <span class="pmed">Persona: 1.70 m</span>`;
+    <span class="pmed">Persona: ${ESTATURA.toFixed(2)} m</span>`;
   cont.appendChild(UI);
   const teclas = new Set();
   UI.querySelectorAll('.pf').forEach(b => {
@@ -331,9 +332,9 @@ export function crearVista3D(cont, cb) {
   }
   function entrar() {
     if (paseo) return;
-    const avatar = construirModelo({ k: 'persona', w: 0.5, d: 0.3, h: 1.7, c: '#a8b8d8' });
+    const avatar = construirModelo({ k: 'persona', w: 0.5, d: 0.3, h: ESTATURA, c: '#a8b8d8' });
     const visera = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.08), new THREE.MeshStandardMaterial({ color: '#2f6fdb' }));
-    visera.position.set(0, 1.62, -0.12); avatar.add(visera);
+    visera.position.set(0, ESTATURA - 0.08, -0.12); avatar.add(visera);
     escena.add(avatar);
     paseo = { x: (g.A[0] + g.B[0]) / 2, y: -0.75, yaw: 0, pitch: -0.05, ojos: false, zoom: innerWidth < 600 ? 2.6 : 1.9, avatar, t: performance.now() };
     ctl.enabled = false; UI.hidden = false; UI.classList.remove('usado'); UI.querySelector('[data-a="ojos"] span').textContent = 'Sus ojos';
@@ -362,7 +363,7 @@ export function crearVista3D(cont, cb) {
     const fx = Math.sin(paseo.yaw), fy = Math.cos(paseo.yaw);
     paseo.avatar.position.set(paseo.x, 0, -paseo.y); paseo.avatar.rotation.y = -paseo.yaw;
     if (paseo.ojos) {
-      camara.position.set(paseo.x, 1.58, -paseo.y);
+      camara.position.set(paseo.x, OJOS, -paseo.y);
     } else {
       // detrás del muñequito; al alejarse con dos dedos sube por encima de las paredes y se ve todo el plano
       let d = paseo.zoom;
@@ -375,7 +376,7 @@ export function crearVista3D(cont, cb) {
       renderer.render(escena, camara); sucio = false;
       return;
     }
-    const ly = 1.58 + Math.tan(paseo.pitch) * 2.5;
+    const ly = OJOS + Math.tan(paseo.pitch) * 2.5;
     camara.lookAt(paseo.x + fx * 2.5, ly, -(paseo.y + fy * 2.5));
     renderer.render(escena, camara); sucio = false;
   }

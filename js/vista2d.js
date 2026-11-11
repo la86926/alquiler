@@ -1,5 +1,5 @@
 /* Vista 2D (SVG) en metros. El portón (AB) queda arriba, como en el croquis. */
-import { anilloMuros, esquinas, ETQ } from './plano.js?v=1.1.8';
+import { anilloMuros, esquinas, ETQ } from './plano.js?v=1.1.9';
 
 const NS = 'http://www.w3.org/2000/svg';
 const f2 = n => n.toFixed(2);
