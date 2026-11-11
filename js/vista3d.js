@@ -1,8 +1,8 @@
 /* Vista 3D (three.js). Mapeo: x del plano → x, altura → y, y del plano → −z. */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { anilloMuros } from './plano.js?v=1.2.1';
-import { construirModelo } from './modelos.js?v=1.2.1';
+import { anilloMuros } from './plano.js?v=1.2.2';
+import { construirModelo } from './modelos.js?v=1.2.2';
 
 const rad = g => g * Math.PI / 180;
 
@@ -57,7 +57,7 @@ export function crearVista3D(cont, cb) {
     x.beginPath(); x.moveTo(4 + r, 4); x.lineTo(W - 4 - r, 4); x.arc(W - 4 - r, H / 2, r, -Math.PI / 2, Math.PI / 2); x.lineTo(4 + r, H - 4); x.arc(4 + r, H / 2, r, Math.PI / 2, Math.PI * 1.5); x.closePath(); x.fill(); x.stroke();
     x.fillStyle = color; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(texto, W / 2, H / 2 + 3);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true }));
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: true, transparent: true }));   // las paredes y muebles lo tapan: nunca se ve «dentro» de la habitación
     sp.scale.set(alto * W / H, alto, 1); sp.renderOrder = 20;
     return sp;
   }
@@ -86,7 +86,7 @@ export function crearVista3D(cont, cb) {
     // letras de las esquinas
     for (const k of ['A', 'B', 'C', 'D']) {
       const q = g[k], v = [q[0] - g.centro[0], q[1] - g.centro[1]], L = Math.hypot(...v) || 1;
-      const sp = letrero(k, { alto: 0.36 }); sp.material.depthTest = !!paseo; sp.position.set(q[0] + v[0] / L * 0.7, 0.3, -(q[1] + v[1] / L * 0.7));   // abajo y afuera de la esquina
+      const sp = letrero(k, { alto: 0.36 }); sp.position.set(q[0] + v[0] / L * 0.7, 0.3, -(q[1] + v[1] / L * 0.7));   // abajo y afuera de la esquina
       casa.add(sp); letras.push(sp);
     }
     // piso
@@ -359,8 +359,6 @@ export function crearVista3D(cont, cb) {
     for (const mu of g.muros) { if (mu.abierto) continue; if ((x - mu.p[0]) * mu.out[0] + (y - mu.p[1]) * mu.out[1] > -0.12) return false }
     return true;
   }
-  // al caminar, las letras y el nombre de la calle se tapan con las paredes como cualquier objeto
-  const letrasDetras = on => { for (const sp of letras) { sp.material.depthTest = on; sp.material.needsUpdate = true } };
   // los muebles que quedan entre la cámara y el muñequito también se ocultan un momento
   let ocultos = new Set();
   const rayoVista = new THREE.Raycaster();
@@ -382,14 +380,13 @@ export function crearVista3D(cont, cb) {
     paseo = { x: (g.A[0] + g.B[0]) / 2, y: -0.75, yaw: 0, pitch: -0.05, ojos: false, lente: 0, zoom: innerWidth < 600 ? 2.6 : 1.9, avatar, t: performance.now() };
     ctl.enabled = false; UI.hidden = false; UI.classList.remove('usado'); UI.querySelector('[data-a="ojos"] span').textContent = 'Sus ojos';
     if (cb.paseo) cb.paseo(true);
-    letrasDetras(true);
     sucio = true;
   }
   function salir(volver) {
     if (!paseo) return;
     escena.remove(paseo.avatar); paseo = null; teclas.clear(); mira = null; pinza = null; dedos.clear();
     for (const k in murosPor) murosPor[k].visible = true; pest.hidden = true;
-    mostrarTodo(); letrasDetras(false);
+    mostrarTodo();
     if (camara.fov !== 45) { camara.fov = 45; camara.updateProjectionMatrix() }
     ctl.enabled = true; UI.hidden = true;
     if (cb.paseo) cb.paseo(false);
