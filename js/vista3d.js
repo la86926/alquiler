@@ -1,8 +1,8 @@
 /* Vista 3D (three.js). Mapeo: x del plano → x, altura → y, y del plano → −z. */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { anilloMuros } from './plano.js?v=1.1.0';
-import { construirModelo } from './modelos.js?v=1.1.0';
+import { anilloMuros } from './plano.js?v=1.1.2';
+import { construirModelo } from './modelos.js?v=1.1.2';
 
 const rad = g => g * Math.PI / 180;
 

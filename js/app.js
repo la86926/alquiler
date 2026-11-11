@@ -1,9 +1,9 @@
-import { CAT, NEGOCIOS, FUENTES, COL } from './catalogo.js?v=1.1.0';
-import { PLANO_INICIAL, ETQ, esCroquisViejo, construir, revisar, iman, acomodar, buscarLugar, areaOcupada, distanciaMuros } from './plano.js?v=1.1.0';
-import { crearVista2D } from './vista2d.js?v=1.1.0';
-import { generarDXF } from './dxf.js?v=1.1.0';
+import { CAT, NEGOCIOS, FUENTES, COL } from './catalogo.js?v=1.1.2';
+import { PLANO_INICIAL, ETQ, esCroquisViejo, construir, revisar, iman, acomodar, buscarLugar, areaOcupada, distanciaMuros } from './plano.js?v=1.1.2';
+import { crearVista2D } from './vista2d.js?v=1.1.2';
+import { generarDXF } from './dxf.js?v=1.1.2';
 
-const VERSION = '1.1.0';
+const VERSION = '1.1.2';
 const LS = 'alq-estado-v1';
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -241,7 +241,7 @@ async function modo(m) {
 }
 async function asegurar3D() {
   if (v3d) return v3d;
-  if (!cargando3d) cargando3d = import('./vista3d.js?v=1.1.0').then(m => {
+  if (!cargando3d) cargando3d = import('./vista3d.js?v=1.1.2').then(m => {
     v3d = m.crearVista3D($('v3d'), { item, seleccionar: u => seleccionar(u), arrastrar, fijo: () => fijo(), anguloEl: $('bAng') });
     v3d.armarCasa(G, E.plano); v3d.mostrar(true); v3d.vista('iso', false);
     return v3d;
