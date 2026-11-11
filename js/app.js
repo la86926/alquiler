@@ -1,9 +1,9 @@
-import { CAT, NEGOCIOS, FUENTES, COL } from './catalogo.js?v=1.1.6';
-import { PLANO_INICIAL, ETQ, colocar, construir, revisar, chocan, iman, acomodar, buscarLugar, areaOcupada, distanciaMuros } from './plano.js?v=1.1.6';
-import { crearVista2D } from './vista2d.js?v=1.1.6';
-import { generarDXF } from './dxf.js?v=1.1.6';
+import { CAT, NEGOCIOS, FUENTES, COL } from './catalogo.js?v=1.1.7';
+import { PLANO_INICIAL, ETQ, colocar, construir, revisar, chocan, iman, acomodar, buscarLugar, areaOcupada, distanciaMuros } from './plano.js?v=1.1.7';
+import { crearVista2D } from './vista2d.js?v=1.1.7';
+import { generarDXF } from './dxf.js?v=1.1.7';
 
-const VERSION = '1.1.6';
+const VERSION = '1.1.7';
 const LS = 'alq-estado-v1';
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -40,7 +40,7 @@ function nuevoEstado() { return { v: 1, ter: 4, plano: Object.assign({}, PLANO_I
    se cambia el terreno y se vuelven a ubicar todos los muebles. */
 function migrar(e) {
   if (!e || (e.ter || 1) >= 4) return false;
-  // v1.1.6: se empieza de nuevo con el terreno ABCD y la distribución propuesta de cada negocio
+  // v1.1.7: se empieza de nuevo con el terreno ABCD y la distribución propuesta de cada negocio
   e.ter = 4;
   e.plano = Object.assign({}, PLANO_INICIAL, { muro: e.plano?.muro || PLANO_INICIAL.muro, alto: e.plano?.alto || PLANO_INICIAL.alto }, e.plano?.calle ? { calle: e.plano.calle } : {});
   const g = construir(e.plano);
@@ -250,8 +250,9 @@ async function modo(m) {
 }
 async function asegurar3D() {
   if (v3d) return v3d;
-  if (!cargando3d) cargando3d = import('./vista3d.js?v=1.1.6').then(m => {
-    v3d = m.crearVista3D($('v3d'), { item, seleccionar: u => seleccionar(u), arrastrar, fijo: () => fijo(), anguloEl: $('bAng') });
+  if (!cargando3d) cargando3d = import('./vista3d.js?v=1.1.7').then(m => {
+    v3d = m.crearVista3D($('v3d'), { item, seleccionar: u => seleccionar(u), arrastrar, fijo: () => fijo(), anguloEl: $('bAng'),
+      items: () => neg().items, paseo: on => { document.body.classList.toggle('paseo-on', on); if (on) { seleccionar(null); cerrarHoja() } } });
     v3d.armarCasa(G, E.plano); v3d.mostrar(true); v3d.vista('iso', false);
     return v3d;
   }).catch(() => { cargando3d = null; toast('No se pudo cargar el 3D. Revisa tu conexión.'); modo('2d') });
@@ -297,9 +298,9 @@ function abrir(id) {
   if (abierta && abierta !== id) $(abierta).hidden = true;
   abierta = id; $(id).hidden = false;
   // Medidas del terreno no tapa el plano: se puede mover y acercar mientras se escribe; se cierra con la X
-  const libre = id === 'hTer', antes = document.body.classList.contains('ter-on');
+  const libre = id === 'hTer';
   $('hojaBg').hidden = libre; document.body.classList.toggle('ter-on', libre);
-  if (libre !== antes) setTimeout(() => v2d.encuadrar(), 60);
+  if (libre) requestAnimationFrame(() => ponerTer());
   if (id === 'hCat') llenarCat();
   if (id === 'hEdit') llenarEdit();
   if (id === 'hLista') { marcados.clear(); pintarLista() }
@@ -311,10 +312,45 @@ function abrir(id) {
 }
 function cerrarHoja() {
   if (abierta) $(abierta).hidden = true; abierta = null; $('hojaBg').hidden = true; if (document.activeElement) document.activeElement.blur?.();
-  if (document.body.classList.contains('ter-on')) { document.body.classList.remove('ter-on'); setTimeout(() => v2d.encuadrar(), 60) }
+  document.body.classList.remove('ter-on');
 }
 $('hojaBg').onclick = cerrarHoja;
 document.querySelectorAll('[data-cerrar]').forEach(b => b.onclick = cerrarHoja);
+
+/* Ventana flotante de Medidas del terreno: se arrastra por su título y recuerda dónde quedó (en este dispositivo) */
+const TPOS = 'alq-ter-pos';
+function ponerTer(x, y) {
+  const el = $('hTer'), w = el.offsetWidth, h = el.offsetHeight;
+  if (x == null) {
+    let g = null; try { g = JSON.parse(localStorage.getItem(TPOS)) } catch (e) {}
+    if (g && isFinite(g.x)) { x = g.x * innerWidth; y = g.y * innerHeight }
+    else if (innerWidth >= 860) { x = innerWidth - w - 76; y = 72 }
+    else { x = 12; y = innerHeight - h - 12 }
+  }
+  const top = 56, x1 = Math.max(8, innerWidth - w - 8), y1 = Math.max(top, innerHeight - Math.min(h, 120));
+  x = Math.max(8, Math.min(x1, x)); y = Math.max(top, Math.min(y1, y));
+  el.style.setProperty('--tx', Math.round(x) + 'px'); el.style.setProperty('--ty', Math.round(y) + 'px');
+  return [x, y];
+}
+(() => {
+  const el = $('hTer'), asa = el.querySelector('.h-top');
+  let ini = null;
+  asa.addEventListener('pointerdown', ev => {
+    if (!document.body.classList.contains('ter-on') || ev.target.closest('button')) return;
+    const r = el.getBoundingClientRect();
+    ini = { id: ev.pointerId, dx: ev.clientX - r.left, dy: ev.clientY - r.top };
+    el.classList.add('arrastra'); try { asa.setPointerCapture(ev.pointerId) } catch (e) {} ev.preventDefault();
+  });
+  asa.addEventListener('pointermove', ev => { if (ini && ev.pointerId === ini.id) ponerTer(ev.clientX - ini.dx, ev.clientY - ini.dy) });
+  const fin = ev => {
+    if (!ini || ev.pointerId !== ini.id) return;
+    ini = null; el.classList.remove('arrastra');
+    const r = el.getBoundingClientRect();
+    try { localStorage.setItem(TPOS, JSON.stringify({ x: r.left / innerWidth, y: r.top / innerHeight })) } catch (e) {}
+  };
+  asa.addEventListener('pointerup', fin); asa.addEventListener('pointercancel', fin);
+  addEventListener('resize', () => { if (document.body.classList.contains('ter-on')) { const r = el.getBoundingClientRect(); ponerTer(r.left, r.top) } });
+})();
 
 /* Catálogo */
 const GRUPOS = ['Este negocio', 'Estantes', 'Mostradores', 'Frío', 'Cafetería', 'Barbería', 'Ropa', 'Salud', 'Oficina', 'Frutas', 'Casa', 'General'];
@@ -573,6 +609,7 @@ function aplicarExterno(v) {
   if (mig) { v2d.encuadrar(); guardar(true) }               // lo migrado también se sube a tu ID
 }
 window.ALQ = {
+  v3d: () => v3d,
   get: () => { const c = Object.assign({}, E); delete c.vista; delete c.tuto; delete c.iman; delete c.fijo2d; delete c.fijo3d; return c },
   set: v => { if (v && v.plano && v.negs) aplicarExterno(v) },
   onChange: null, onIdView: null
@@ -602,7 +639,7 @@ document.addEventListener('keydown', ev => {
   if (ev.target.closest && ev.target.closest('input,textarea')) return;
   if ((ev.metaKey || ev.ctrlKey) && ['+', '-', '=', '0'].includes(ev.key)) { ev.preventDefault(); return }
   const o = sel && item(sel);
-  if (ev.key === 'Escape') { if (!$('angPop').hidden) cerrarAng(); else if (abierta) cerrarHoja(); else seleccionar(null); return }
+  if (ev.key === 'Escape') { if (v3d && v3d.caminando) v3d.salirPaseo(); else if (!$('angPop').hidden) cerrarAng(); else if (abierta) cerrarHoja(); else seleccionar(null); return }
   if (!o) return;
   const p = ev.shiftKey ? 0.1 : 0.01;
   const mov = { ArrowLeft: [-p, 0], ArrowRight: [p, 0], ArrowUp: [0, -p], ArrowDown: [0, p] }[ev.key];
@@ -631,7 +668,7 @@ function tutorial() {
     { tx: 'Gíralo con estos botones o con el círculo azul.', el: () => $('sbDer'), anim: 'toca' },
     { tx: 'O toca aquí y escribe el ángulo: positivo gira antihorario, negativo horario.', el: () => $('bAng'), anim: 'toca' },
     { tx: 'El candado fija todos los muebles. En 2D empieza abierto para moverlos; en 3D empieza cerrado para que no muevas nada sin querer.', el: () => $('bFijo'), anim: 'toca' },
-    { tx: 'En 3D ves lo mismo, en el mismo lugar. Para mover ahí, abre el candado.', el: () => $('b3d'), anim: 'toca', antes: () => seleccionar(null) },
+    { tx: 'En 3D ves lo mismo, en el mismo lugar. Para mover ahí, abre el candado. Con el botón de la persona entras y caminas por dentro con las flechas.', el: () => $('b3d'), anim: 'toca', antes: () => seleccionar(null) },
     { tx: 'Elige un negocio y mira si todo cabe.', el: () => $('titBtn'), anim: 'toca' },
     { tx: '¿Prefieres armarlo tú? En la Lista, «Empezar de cero» quita los muebles que vienen por defecto.', el: () => $('lsCero'), anim: 'toca', antes: () => abrir('hLista') },
     { tx: 'Luego agrega los tuyos, con medidas de Sodimac, Promart y otras tiendas.', el: () => $('bAdd'), anim: 'toca', antes: () => cerrarHoja() }

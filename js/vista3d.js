@@ -1,8 +1,8 @@
 /* Vista 3D (three.js). Mapeo: x del plano → x, altura → y, y del plano → −z. */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { anilloMuros } from './plano.js?v=1.1.6';
-import { construirModelo } from './modelos.js?v=1.1.6';
+import { anilloMuros } from './plano.js?v=1.1.7';
+import { construirModelo } from './modelos.js?v=1.1.7';
 
 const rad = g => g * Math.PI / 180;
 
@@ -149,6 +149,8 @@ export function crearVista3D(cont, cb) {
 
   function vista(tipo, suave = true) {
     if (!g) return;
+    if (tipo === 'dentro') { entrar(); return }
+    if (paseo) salir(false);
     const [cx, cy] = g.centro, t = new THREE.Vector3(cx, 0.9, -cy);
     const R = Math.max(g.caja.x1 - g.caja.x0, g.caja.y1 - g.caja.y0);
     let pos;
@@ -189,7 +191,7 @@ export function crearVista3D(cont, cb) {
     return ray.ray.intersectPlane(suelo0, p) ? p : null;
   }
   cont.addEventListener('pointerdown', ev => {
-    if (!visible || ev.button > 0) return;
+    if (!visible || ev.button > 0 || paseo) return;
     toque = { x: ev.clientX, y: ev.clientY, n: (toque && toque.activo ? toque.n + 1 : 1), activo: true };
     if (toque.n > 1) { if (drag) { cb.arrastrar(drag.uid, null, null, 'fin'); drag = null; ctl.enabled = true } return }
     const uid = tocado(ev);
@@ -247,9 +249,110 @@ export function crearVista3D(cont, cb) {
   }
   new ResizeObserver(tam).observe(cont);
 
-  function bucle() {
+  /* ---------- Caminar por dentro: un muñequito que entra desde la vereda ----------
+     Flechas (o teclado) para avanzar y girar; arrastrar el dedo para mirar alrededor.
+     La cámara va detrás del muñequito o «con sus ojos». No atraviesa paredes ni muebles. */
+  let paseo = null;
+  const UI = document.createElement('div'); UI.className = 'paseo'; UI.hidden = true;
+  const flecha = (d, rot) => `<button class="pf" data-m="${d}" aria-label="${{ f: 'Avanzar', b: 'Retroceder', l: 'Girar a la izquierda', r: 'Girar a la derecha' }[d]}"><svg viewBox="0 0 24 24" style="transform:rotate(${rot}deg)"><path d="M12 5l7 9H5z"/></svg></button>`;
+  UI.innerHTML = `<div class="pad">${flecha('f', 0)}${flecha('l', -90)}${flecha('r', 90)}${flecha('b', 180)}</div>
+    <div class="pbtn"><button class="pb" data-a="ojos"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Sus ojos</span></button><button class="pb" data-a="salir"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg><span>Salir</span></button></div>
+    <p class="phint">Usa las flechas para caminar. Arrastra para mirar.</p>`;
+  cont.appendChild(UI);
+  const teclas = new Set();
+  UI.querySelectorAll('.pf').forEach(b => {
+    const on = ev => { ev.preventDefault(); teclas.add(b.dataset.m); b.classList.add('on'); try { b.setPointerCapture(ev.pointerId) } catch (e) {} };
+    const off = () => { teclas.delete(b.dataset.m); b.classList.remove('on') };
+    b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('lostpointercapture', off);
+    b.addEventListener('contextmenu', ev => ev.preventDefault());
+  });
+  UI.querySelector('[data-a="salir"]').onclick = () => salir(true);
+  UI.querySelector('[data-a="ojos"]').onclick = () => {
+    if (!paseo) return; paseo.ojos = !paseo.ojos; paseo.avatar.visible = !paseo.ojos;
+    UI.querySelector('[data-a="ojos"] span').textContent = paseo.ojos ? 'Desde atrás' : 'Sus ojos'; sucio = true;
+  };
+  const MAPA_TECLAS = { ArrowUp: 'f', KeyW: 'f', ArrowDown: 'b', KeyS: 'b', ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r' };
+  addEventListener('keydown', ev => { if (paseo && visible && MAPA_TECLAS[ev.code] && !ev.target.closest?.('input,textarea')) { ev.preventDefault(); ev.stopPropagation(); teclas.add(MAPA_TECLAS[ev.code]) } }, true);
+  addEventListener('keyup', ev => { if (MAPA_TECLAS[ev.code]) teclas.delete(MAPA_TECLAS[ev.code]) }, true);
+  addEventListener('blur', () => teclas.clear());
+  // mirar arrastrando
+  let mira = null;
+  renderer.domElement.addEventListener('pointerdown', ev => { if (!paseo) return; mira = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, yaw: paseo.yaw, pitch: paseo.pitch }; try { renderer.domElement.setPointerCapture(ev.pointerId) } catch (e) {} });
+  renderer.domElement.addEventListener('pointermove', ev => {
+    if (!paseo || !mira || ev.pointerId !== mira.id) return;
+    paseo.yaw = mira.yaw + (ev.clientX - mira.x) * 0.006;
+    paseo.pitch = Math.max(-0.6, Math.min(0.5, mira.pitch - (ev.clientY - mira.y) * 0.004));
+    UI.classList.add('usado');
+  });
+  const finMira = ev => { if (mira && ev.pointerId === mira.id) mira = null };
+  renderer.domElement.addEventListener('pointerup', finMira); renderer.domElement.addEventListener('pointercancel', finMira);
+
+  const RADIO = 0.2;
+  function libre(x, y) {
+    if (y < 0) { if (y < -1.45 || x < g.caja.x0 - 2.5 || x > g.caja.x1 + 2.5) return false }   // en la vereda
+    else for (const mu of g.muros) { if (mu.abierto) continue; if ((x - mu.p[0]) * mu.out[0] + (y - mu.p[1]) * mu.out[1] > -RADIO) return false }
+    for (const o of cb.items ? cb.items() : []) {
+      if (o.x == null || (o.e || 0) > 1.2 || o.h < 0.12) continue;    // lo colgado alto y lo que está a ras del piso no estorba
+      const c = Math.cos(rad(o.rot || 0)), sn = Math.sin(rad(o.rot || 0)), dx = x - o.x, dy = y - o.y;
+      const lx = dx * c + dy * sn, ly = -dx * sn + dy * c;
+      const qx = Math.max(-o.w / 2, Math.min(o.w / 2, lx)), qy = Math.max(-o.d / 2, Math.min(o.d / 2, ly));
+      if (Math.hypot(lx - qx, ly - qy) < RADIO) return false;
+    }
+    return true;
+  }
+  // la cámara puede quedar sobre la vereda o la pista, pero no detrás de una pared
+  function camLibre(x, y) {
+    if (y < 0) return y > -8 && x > g.caja.x0 - 4 && x < g.caja.x1 + 4;
+    for (const mu of g.muros) { if (mu.abierto) continue; if ((x - mu.p[0]) * mu.out[0] + (y - mu.p[1]) * mu.out[1] > -0.12) return false }
+    return true;
+  }
+  function entrar() {
+    if (paseo) return;
+    const avatar = construirModelo({ k: 'persona', w: 0.5, d: 0.3, h: 1.7, c: '#a8b8d8' });
+    const visera = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.08), new THREE.MeshStandardMaterial({ color: '#2f6fdb' }));
+    visera.position.set(0, 1.62, -0.12); avatar.add(visera);
+    escena.add(avatar);
+    paseo = { x: (g.A[0] + g.B[0]) / 2, y: -0.75, yaw: 0, pitch: -0.05, ojos: false, avatar, t: performance.now() };
+    ctl.enabled = false; UI.hidden = false; UI.classList.remove('usado'); UI.querySelector('[data-a="ojos"] span').textContent = 'Sus ojos';
+    if (cb.paseo) cb.paseo(true);
+    sucio = true;
+  }
+  function salir(volver) {
+    if (!paseo) return;
+    escena.remove(paseo.avatar); paseo = null; teclas.clear(); mira = null;
+    ctl.enabled = true; UI.hidden = true;
+    if (cb.paseo) cb.paseo(false);
+    if (volver) vista('iso');
+  }
+  function andar(now) {
+    const dt = Math.min(0.1, (now - paseo.t) / 1000); paseo.t = now;
+    const giro = (teclas.has('r') ? 1 : 0) - (teclas.has('l') ? 1 : 0), paso = (teclas.has('f') ? 1 : 0) - (teclas.has('b') ? 0.7 : 0);
+    if (giro || paso) UI.classList.add('usado');
+    paseo.yaw += giro * 1.7 * dt;
+    if (paso) {
+      const v = paso * 1.15 * dt, nx = paseo.x + Math.sin(paseo.yaw) * v, ny = paseo.y + Math.cos(paseo.yaw) * v;
+      if (libre(nx, ny)) { paseo.x = nx; paseo.y = ny }
+      else if (libre(nx, paseo.y)) paseo.x = nx;       // se desliza junto a la pared
+      else if (libre(paseo.x, ny)) paseo.y = ny;
+    }
+    const fx = Math.sin(paseo.yaw), fy = Math.cos(paseo.yaw);
+    paseo.avatar.position.set(paseo.x, 0, -paseo.y); paseo.avatar.rotation.y = -paseo.yaw;
+    if (paseo.ojos) {
+      camara.position.set(paseo.x, 1.58, -paseo.y);
+    } else {
+      let d = 1.9;                                        // detrás del muñequito, sin meterse en la pared
+      while (d > 0.45 && !camLibre(paseo.x - fx * d, paseo.y - fy * d)) d -= 0.1;
+      camara.position.set(paseo.x - fx * d, 2.05 + (1.9 - d) * 0.25, -(paseo.y - fy * d));
+    }
+    const ly = (paseo.ojos ? 1.58 : 1.05) + Math.tan(paseo.pitch) * 2.5;
+    camara.lookAt(paseo.x + fx * 2.5, ly, -(paseo.y + fy * 2.5));
+    renderer.render(escena, camara); sucio = false;
+  }
+
+  function bucle(now) {
     if (!visible) return;
     requestAnimationFrame(bucle);
+    if (paseo) { andar(now || performance.now()); return }
     if (ctl.update() || sucio) { renderer.render(escena, camara); sucio = false }
     moverEtiqueta();
   }
@@ -258,7 +361,10 @@ export function crearVista3D(cont, cb) {
     armarCasa, ponerMuebles, vista, alturaMuros,
     get altoMuros() { return altoMuros },
     tema() { escena.background = new THREE.Color(fondo()); sucio = true },
-    mostrar(on) { const antes = visible; visible = on; if (on && !antes) { tam(); sucio = true; requestAnimationFrame(bucle) } },
+    mostrar(on) { const antes = visible; visible = on; if (!on && paseo) salir(false); if (on && !antes) { tam(); sucio = true; requestAnimationFrame(bucle) } },
+    get caminando() { return !!paseo },
+    get dondeCamina() { return paseo ? [+paseo.x.toFixed(2), +paseo.y.toFixed(2)] : null },
+    salirPaseo() { salir(true) },
     foto() { renderer.render(escena, camara); return renderer.domElement.toDataURL('image/png') }
   };
 }
