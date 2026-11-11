@@ -1,0 +1,521 @@
+import { CAT, NEGOCIOS, FUENTES, COL } from './catalogo.js';
+import { PLANO_INICIAL, construir, revisar, iman, acomodar, buscarLugar, areaOcupada, distanciaMuros } from './plano.js';
+import { crearVista2D } from './vista2d.js';
+import { generarDXF } from './dxf.js';
+
+const VERSION = '1.0.0';
+const LS = 'alq-estado-v1';
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const cm = m => Math.round(m * 1000) / 10;
+const fmtCm = m => (Math.round(m * 1000) / 10).toString();
+const dims = o => `${fmtCm(o.w)} × ${fmtCm(o.d)} × ${fmtCm(o.h)} cm`;
+const num = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : NaN };
+let nUid = 0; const uid = () => 'u' + Date.now().toString(36) + (nUid++).toString(36) + Math.random().toString(36).slice(2, 5);
+
+/* ---------- Íconos ---------- */
+const IC = {
+  casa: '<path d="M3.5 9.5L10 4l6.5 5.5v7h-13z"/><path d="M8 16.5v-4h4v4"/>',
+  bodega: '<path d="M3 8l1.4-4.5h11.2L17 8"/><path d="M3 8a2.3 2.3 0 0 0 4.7 0 2.3 2.3 0 0 0 4.6 0A2.3 2.3 0 0 0 17 8"/><path d="M4.2 10.2v6.3h11.6v-6.3"/>',
+  carrito: '<path d="M2.5 4h2l1.8 8.5h8.2l1.8-6.2H5.5"/><circle cx="8" cy="15.5" r="1.1"/><circle cx="13.5" cy="15.5" r="1.1"/>',
+  llave: '<path d="M12.6 3.4a3.8 3.8 0 0 0-4.7 4.9L3.6 12.6a1.6 1.6 0 0 0 2.3 2.3l4.3-4.3a3.8 3.8 0 0 0 4.9-4.7l-2.3 2.3-2.2-.6-.6-2.2z"/>',
+  laptop: '<rect x="4.5" y="4.5" width="11" height="7.5" rx="1"/><path d="M2.5 15.5h15"/>',
+  gancho: '<path d="M10 7.8V7c0-1.1 1.6-1.4 1.6-2.6a1.6 1.6 0 0 0-3.2 0"/><path d="M10 7.8L3 13.5h14z"/>',
+  huella: '<circle cx="6.2" cy="8" r="1.4"/><circle cx="9" cy="5.3" r="1.4"/><circle cx="12.5" cy="5.6" r="1.4"/><circle cx="14.8" cy="8.6" r="1.4"/><path d="M7 14.5c0-2.4 1.6-4.3 3.4-4.3s3.4 1.9 3.4 4.3c0 1.2-1 1.6-1.9 1.4-1-.2-1.4-.5-1.5-.5s-.5.3-1.5.5c-.9.2-1.9-.2-1.9-1.4z"/>',
+  capsula: '<rect x="3" y="7.3" width="14" height="5.4" rx="2.7" transform="rotate(-35 10 10)"/><path d="M8.4 7.7l3.2 4.6"/>',
+  taza: '<path d="M4 8h10v3.5a4.5 4.5 0 0 1-4.5 4.5h-1A4.5 4.5 0 0 1 4 11.5z"/><path d="M14 9.2h1.2a2 2 0 0 1 0 4H14M7.5 3.5v2M10.5 3.5v2"/>',
+  cruz: '<rect x="3.5" y="3.5" width="13" height="13" rx="3"/><path d="M10 6.8v6.4M6.8 10h6.4"/>',
+  tijera: '<circle cx="5.5" cy="14.5" r="2"/><circle cx="14.5" cy="14.5" r="2"/><path d="M7 13l8-9.5M13 13L5 3.5"/>',
+  estetoscopio: '<path d="M5 3.5v4a3.5 3.5 0 0 0 7 0v-4"/><path d="M8.5 11v1.5a3.5 3.5 0 0 0 7 0V11"/><circle cx="15.5" cy="9.5" r="1.5"/>',
+  maletin: '<rect x="3" y="6.5" width="14" height="9.5" rx="1.6"/><path d="M7.5 6.5V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5M3 10.5h14"/>',
+  libro: '<path d="M10 5.5C8.5 4.3 6 4 3.5 4.5v11c2.5-.5 5 0 6.5 1.2 1.5-1.2 4-1.7 6.5-1.2v-11C14 4 11.5 4.3 10 5.5zM10 5.5v11.2"/>',
+  mano: '<path d="M7 10V5a1.2 1.2 0 0 1 2.4 0v4.5M9.4 9V3.8a1.2 1.2 0 0 1 2.4 0V9M11.8 9V4.8a1.2 1.2 0 0 1 2.4 0V11c0 3.2-2 5.5-5 5.5-2 0-3.2-1-4.3-2.6L3.6 11.5a1.2 1.2 0 0 1 2-1.3L7 12"/>',
+  fruta: '<path d="M10 6.5c-1.2-.9-4.8-1.3-5.6 2.5-.6 3 1.6 7.5 3.8 7.5 1 0 1.2-.5 1.8-.5s.8.5 1.8.5c2.2 0 4.4-4.5 3.8-7.5-.8-3.8-4.4-3.4-5.6-2.5z"/><path d="M10 6.5c0-1.5.5-2.6 1.8-3.2"/>'
+};
+const icono = k => `<svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${IC[k] || IC.casa}</svg>`;
+
+/* ---------- Estado ---------- */
+function nuevoEstado() { return { v: 1, plano: Object.assign({}, PLANO_INICIAL), cur: 'casa', negs: {}, extra: [], vista: '2d', iman: true, tuto: 0, t: Date.now() } }
+function cargar() {
+  try { const e = JSON.parse(localStorage.getItem(LS)); if (e && e.plano && e.negs) return Object.assign(nuevoEstado(), e) } catch (e) {}
+  return null;
+}
+let E = cargar() || nuevoEstado();
+let G = construir(E.plano) || construir(PLANO_INICIAL);
+let sel = null, est = {}, v3d = null, cargando3d = null;
+
+const defs = () => NEGOCIOS.concat(E.extra || []);
+const def = id => defs().find(n => n.id === id) || NEGOCIOS[0];
+function nuevoItem(id, z) {
+  const c = CAT[id];
+  const o = { uid: uid(), id, n: c.n, k: c.k, w: c.w / 100, d: c.d / 100, h: c.h / 100, e: (c.e || 0) / 100, c: c.c, z: z || zonaDe(id), x: null, y: null, rot: 0 };
+  if (c.niv) o.niv = c.niv; if (c.cerrado) o.cerrado = 1; if (c.frio) o.frio = 1;
+  return o;
+}
+const PARED = new Set(['estante', 'refri', 'congeladora', 'refrigeradora', 'panel', 'repisa', 'tocador', 'puestob', 'lavacab', 'espejo', 'barrap', 'probador', 'jaula', 'banera', 'archivador', 'ropero', 'rack', 'tv', 'cocina', 'lavadero', 'inodoro', 'lavatorio', 'sofa', 'cama', 'velador', 'escritorio', 'mesatec', 'fotocop', 'escalonado', 'jabas', 'barracafe', 'banca', 'espaldera', 'vitrinav', 'dispensador', 'carrito']);
+const zonaDe = id => id === 'bano' ? 'bano' : PARED.has(CAT[id].k) ? 'pared' : 'centro';
+function propuesta(id) {
+  const d = def(id);
+  if (d.base) return { items: d.base.map(o => Object.assign({}, o, { uid: uid() })) };
+  const items = [];
+  for (const p of d.items) for (let i = 0; i < p.n; i++) items.push(nuevoItem(p.id, p.z));
+  acomodar(G, items);
+  return { items };
+}
+function neg(id = E.cur) {
+  if (!E.negs[id]) E.negs[id] = propuesta(id);
+  return E.negs[id];
+}
+const item = u => neg().items.find(o => o.uid === u);
+
+let tGuardar = 0;
+function guardar(ya) {
+  E.t = Date.now();
+  clearTimeout(tGuardar);
+  const f = () => { try { localStorage.setItem(LS, JSON.stringify(E)) } catch (e) {} ; if (window.ALQ.onChange) window.ALQ.onChange() };
+  if (ya) f(); else tGuardar = setTimeout(f, 250);
+}
+
+/* ---------- Vistas ---------- */
+const v2d = crearVista2D($('v2d'), {
+  item, seleccionar: u => seleccionar(u), arrastrar, girar,
+  medida: d => { if (d != null) toast(`${d.toFixed(2)} m`) }
+});
+const arr = {};
+function arrastrar(u, x, y, fase) {
+  const o = item(u); if (!o) return;
+  if (fase === 'fin') {
+    delete arr[u];
+    o.x = +o.x.toFixed(4); o.y = +o.y.toFixed(4); o.rot = +((o.rot || 0) % 360).toFixed(2);
+    guardar(); pintar(); return;
+  }
+  if (!(u in arr)) arr[u] = o.rot || 0;
+  o.x = x; o.y = y; o.rot = arr[u];
+  if (E.iman) iman(G, o);
+  pedirPintar();
+}
+function girar(u, a, fase) {
+  const o = item(u); if (!o) return;
+  if (fase === 'fin') { guardar(); pintar(); return }
+  a = ((a % 360) + 360) % 360;
+  let r = Math.round(a / 15) * 15;
+  for (const mu of G.muros) { const mr = ((mu.rot % 360) + 360) % 360; if (Math.abs(((a - mr + 540) % 360) - 180) < 5) r = mr }
+  o.rot = +(r % 360).toFixed(2);
+  pedirPintar();
+}
+function seleccionar(u) {
+  sel = u && item(u) ? u : null;
+  if (!sel && abierta === 'hEdit') cerrarHoja();
+  pintar();
+  if (sel && abierta === 'hEdit') llenarEdit();
+}
+
+let pend = false;
+function pedirPintar() { if (pend) return; pend = true; requestAnimationFrame(() => { pend = false; pintar() }) }
+function pintar() {
+  const N = neg();
+  est = revisar(G, N.items);
+  v2d.poner(G, E.plano, N.items, est, sel);
+  if (v3d && E.vista === '3d') v3d.ponerMuebles(N.items, est, sel);
+  // título
+  const d = def(E.cur);
+  $('titTx').textContent = d.n; $('titIc').innerHTML = icono(d.ic);
+  // estado general
+  const c = { choca: 0, fuera: 0, sin: 0 };
+  for (const k in est) if (c[est[k]] != null) c[est[k]]++;
+  const partes = [];
+  if (c.choca) partes.push(`${c.choca} ${c.choca === 1 ? 'choca' : 'chocan'}`);
+  if (c.fuera) partes.push(`${c.fuera} fuera`);
+  if (c.sin) partes.push(`${c.sin} no ${c.sin === 1 ? 'entró' : 'entraron'}`);
+  const pct = Math.round(areaOcupada(N.items) / G.area * 100);
+  $('pillTx').textContent = partes.length ? partes.join(' · ') : `Todo cabe · ${pct}% del piso`;
+  $('pill').classList.toggle('mal', partes.length > 0);
+  // barra del elegido
+  const o = sel && item(sel);
+  $('selbar').hidden = !o || o.x == null;
+  if (o && o.x != null) {
+    $('sbNom').textContent = o.n;
+    const e = est[o.uid];
+    $('sbDim').textContent = dims(o) + (e === 'choca' ? ' · choca' : e === 'fuera' ? ' · se sale' : '');
+  }
+  if (abierta === 'hLista') pintarLista();
+  if (abierta === 'hEdit' && o) pintarDist(o);
+}
+
+/* ---------- 2D / 3D ---------- */
+async function modo(m) {
+  E.vista = m; guardar();
+  $('b2d').setAttribute('aria-selected', m === '2d'); $('b3d').setAttribute('aria-selected', m === '3d');
+  $('v2d').hidden = m !== '2d'; $('v3d').hidden = m !== '3d';
+  $('ctl2d').hidden = m !== '2d'; $('ctl3d').hidden = m !== '3d';
+  if (m === '3d') {
+    if (v2d.midiendo) { v2d.medir(false); $('bMedir').setAttribute('aria-pressed', 'false') }
+    await asegurar3D();
+    if (!v3d) return;
+    v3d.mostrar(true); pintar();
+  } else if (v3d) v3d.mostrar(false);
+}
+async function asegurar3D() {
+  if (v3d) return v3d;
+  if (!cargando3d) cargando3d = import('./vista3d.js').then(m => {
+    v3d = m.crearVista3D($('v3d'), { item, seleccionar: u => seleccionar(u), arrastrar });
+    v3d.armarCasa(G, E.plano); v3d.mostrar(true); v3d.vista('iso', false);
+    return v3d;
+  }).catch(() => { cargando3d = null; toast('No se pudo cargar el 3D. Revisa tu conexión.'); modo('2d') });
+  return cargando3d;
+}
+$('b2d').onclick = () => modo('2d');
+$('b3d').onclick = () => modo('3d');
+document.querySelectorAll('#ctl3d [data-v]').forEach(b => b.onclick = () => v3d && v3d.vista(b.dataset.v));
+$('bMuros').onclick = () => { if (!v3d) return; const a = v3d.altoMuros > 0.9 ? 0.36 : 1; v3d.alturaMuros(a); $('bMuros').setAttribute('aria-pressed', a < 1) };
+$('zIn').onclick = () => v2d.zoom(1.25); $('zOut').onclick = () => v2d.zoom(0.8); $('zFit').onclick = () => v2d.encuadrar();
+$('bMedir').onclick = () => { const on = !v2d.midiendo; v2d.medir(on); $('bMedir').setAttribute('aria-pressed', on); if (on) { seleccionar(null); toast('Toca dos puntos para medir') } };
+$('bIman').onclick = () => { E.iman = !E.iman; $('bIman').setAttribute('aria-pressed', E.iman); guardar(); toast(E.iman ? 'Imán activado: se pegan a las paredes' : 'Imán desactivado') };
+$('pill').onclick = () => abrir('hLista');
+
+/* ---------- Barra del mueble elegido ---------- */
+function rotar(da) { const o = item(sel); if (!o) return; o.rot = (((o.rot || 0) + da) % 360 + 360) % 360; guardar(); pintar(); if (abierta === 'hEdit') llenarEdit() }
+$('sbIzq').onclick = () => rotar(-15); $('sbDer').onclick = () => rotar(15);
+$('sbMed').onclick = $('sbInfo').onclick = () => abrir('hEdit');
+$('sbDup').onclick = () => {
+  const o = item(sel); if (!o) return;
+  const c = Object.assign({}, o, { uid: uid() });
+  c.x = o.x + 0.2; c.y = o.y + 0.2;
+  const N = neg(); N.items.push(c);
+  acomodarUno(c, N, o);
+  sel = c.uid; guardar(); pintar();
+};
+$('sbDel').onclick = () => { const N = neg(); N.items = N.items.filter(o => o.uid !== sel); sel = null; cerrarHoja(); guardar(); pintar() };
+
+function acomodarUno(o, N, cerca) {
+  const otros = N.items.filter(p => p.uid !== o.uid);
+  const prueba = Object.assign({}, o);
+  if (o.z !== 'centro' || !cerca) { acomodar(G, [prueba], otros); if (prueba.x != null) { Object.assign(o, prueba); return true } }
+  if (cerca) { o.x = cerca.x; o.y = cerca.y; o.rot = cerca.rot }
+  const ok = buscarLugar(G, N.items, o);
+  if (!ok) toast('No hay espacio libre: quedó en rojo. Muévelo o quita algo.');
+  return ok;
+}
+
+/* ---------- Hojas ---------- */
+let abierta = null;
+function abrir(id) {
+  cerrarMenu();
+  if (abierta && abierta !== id) $(abierta).hidden = true;
+  abierta = id; $(id).hidden = false; $('hojaBg').hidden = false;
+  if (id === 'hCat') llenarCat();
+  if (id === 'hEdit') llenarEdit();
+  if (id === 'hLista') { marcados.clear(); pintarLista() }
+  if (id === 'hNeg') pintarNegs();
+  if (id === 'hTer') llenarTer();
+  if (id === 'hExp') $('exDxfS').textContent = `${def(E.cur).n}: muros, baño y muebles`;
+  if (id === 'hId' && window.ALQ.onIdView) window.ALQ.onIdView();
+}
+function cerrarHoja() { if (abierta) $(abierta).hidden = true; abierta = null; $('hojaBg').hidden = true; if (document.activeElement) document.activeElement.blur?.() }
+$('hojaBg').onclick = cerrarHoja;
+document.querySelectorAll('[data-cerrar]').forEach(b => b.onclick = cerrarHoja);
+
+/* Catálogo */
+const GRUPOS = ['Este negocio', 'Estantes', 'Mostradores', 'Frío', 'Cafetería', 'Barbería', 'Ropa', 'Salud', 'Oficina', 'Frutas', 'Casa', 'General'];
+let grupo = 'Este negocio';
+function mini(c) {
+  const k = 44 / Math.max(c.w, c.d), w = Math.max(6, c.w * k), d = Math.max(4, c.d * k);
+  return `<svg viewBox="0 0 48 48" width="48" height="48"><rect x="${(48 - w) / 2}" y="${(48 - d) / 2}" width="${w}" height="${d}" rx="2" fill="${c.c}" stroke="rgba(22,32,42,.4)" stroke-width="1"/><line x1="${(48 - w) / 2 + 1}" y1="${(48 - d) / 2}" x2="${(48 + w) / 2 - 1}" y2="${(48 - d) / 2}" stroke="rgba(22,32,42,.6)" stroke-width="2" stroke-linecap="round"/></svg>`;
+}
+function llenarCat() {
+  $('catG').innerHTML = GRUPOS.map(g => `<button aria-pressed="${g === grupo}" data-g="${g}">${g}</button>`).join('');
+  $('catG').querySelectorAll('button').forEach(b => b.onclick = () => { grupo = b.dataset.g; $('catQ').value = ''; llenarCat() });
+  const q = $('catQ').value.trim().toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+  let ids = Object.keys(CAT);
+  const d = def(E.cur);
+  if (q) ids = ids.filter(id => CAT[id].n.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').includes(q));
+  else if (grupo === 'Este negocio') ids = d.items ? [...new Set(d.items.map(p => p.id).filter(i => i !== 'bano'))].concat(['persona', 'planta', 'tacho'].filter(i => !d.items.some(p => p.id === i))) : ids;
+  else ids = ids.filter(id => CAT[id].g === grupo);
+  $('catL').innerHTML = ids.map(id => { const c = CAT[id]; return `<button class="ci" data-id="${id}"><span class="sw">${mini(c)}</span><b>${esc(c.n)}</b><span>${c.w} × ${c.d} × ${c.h} cm</span></button>` }).join('');
+  $('catL').querySelectorAll('.ci').forEach(b => b.onclick = () => agregar(b.dataset.id));
+}
+$('catQ').oninput = () => llenarCat();
+function agregar(id) {
+  const N = neg();
+  const dz = (def(E.cur).items || []).find(p => p.id === id);
+  const o = nuevoItem(id, dz ? dz.z : undefined);
+  N.items.push(o);
+  acomodarUno(o, N);
+  sel = o.uid; cerrarHoja(); guardar(); pintar();
+  toast(`${o.n} · ${dims(o)}`);
+}
+$('bAdd').onclick = () => abrir('hCat');
+$('bLista').onclick = () => abrir('hLista');
+
+/* Medidas del mueble */
+const COLORES = Object.values(COL);
+function llenarEdit() {
+  const o = item(sel); if (!o) { cerrarHoja(); return }
+  $('edTit').textContent = 'Medidas';
+  $('edN').value = o.n;
+  $('edW').value = fmtCm(o.w); $('edD').value = fmtCm(o.d); $('edH').value = fmtCm(o.h);
+  $('edE').value = fmtCm(o.e || 0); $('edR').value = (+(o.rot || 0).toFixed(1)).toString();
+  const cols = COLORES.includes(o.c) ? COLORES : [o.c].concat(COLORES);
+  $('edC').innerHTML = cols.map(c => `<button style="background:${c}" data-c="${c}" aria-pressed="${c === o.c}" aria-label="Color"></button>`).join('');
+  $('edC').querySelectorAll('button').forEach(b => b.onclick = () => { o.c = b.dataset.c; guardar(); pintar(); llenarEdit() });
+  const c = CAT[o.id] || {};
+  const f = FUENTES[c.f] || FUENTES.tipica;
+  const tienda = c.w ? `${c.w} × ${c.d} × ${c.h} cm` : '';
+  $('edF').innerHTML = c.f && c.f !== 'tipica'
+    ? `Medida de tienda: ${tienda} · ${f[1] ? `<a href="${f[1]}" target="_blank" rel="noopener">${esc(f[0])}</a>` : esc(f[0])}${c.nota ? `<br>${esc(c.nota)}` : ''}`
+    : `Medida típica: ${tienda}. Revísala con el mueble que vayas a comprar.${c.nota ? `<br>${esc(c.nota)}` : ''}`;
+  $('edCopia').innerHTML = defs().filter(n => n.id !== E.cur).map(n => `<button data-n="${n.id}">${esc(n.n)}</button>`).join('');
+  $('edCopia').querySelectorAll('button').forEach(b => b.onclick = () => copiarA([o], b.dataset.n));
+  pintarDist(o);
+}
+function pintarDist(o) {
+  if (o.x == null) { $('edDist').innerHTML = ''; return }
+  const ds = distanciaMuros(G, o).filter(x => x.id !== 'AB' || x.d < 1.5);
+  $('edDist').innerHTML = ds.map(x => `<span class="${x.d < 0.6 ? 'cerca' : ''}">${x.id === 'AB' ? 'Portón' : x.n.replace('Pared ', '')}: ${x.d < 0 ? 'se sale ' + Math.abs(x.d * 100).toFixed(0) + ' cm' : (x.d * 100).toFixed(0) + ' cm'}</span>`).join('');
+}
+function campo(idEl, fn) {
+  $(idEl).addEventListener('input', () => { const o = item(sel); if (!o) return; fn(o, $(idEl).value); pintar() });
+  $(idEl).addEventListener('change', () => { guardar(); const o = item(sel); if (o) llenarEdit() });
+}
+campo('edN', (o, v) => { o.n = v.trim() || (CAT[o.id] || {}).n || 'Mueble' });
+campo('edW', (o, v) => { const n = num(v); if (n >= 1 && n <= 2000) o.w = n / 100 });
+campo('edD', (o, v) => { const n = num(v); if (n >= 1 && n <= 2000) o.d = n / 100 });
+campo('edH', (o, v) => { const n = num(v); if (n >= 1 && n <= 400) o.h = n / 100 });
+campo('edE', (o, v) => { const n = num(v); if (n >= 0 && n <= 350) o.e = n / 100 });
+campo('edR', (o, v) => { const n = num(v); if (isFinite(n)) o.rot = ((n % 360) + 360) % 360 });
+$('edAlin').onclick = () => {
+  const o = item(sel); if (!o || o.x == null) return;
+  let mejor = null;
+  for (const mu of G.muros) {
+    const t = (o.x - mu.p[0]) * mu.u[0] + (o.y - mu.p[1]) * mu.u[1];
+    const dd = Math.abs((o.x - mu.p[0]) * mu.out[0] + (o.y - mu.p[1]) * mu.out[1]);
+    if (!mejor || dd < mejor.dd) mejor = { mu, t, dd };
+  }
+  const { mu } = mejor, t = Math.max(o.w / 2, Math.min(mu.L - o.w / 2, mejor.t)), k = o.d / 2 + 0.002;
+  o.rot = mu.rot; o.x = mu.p[0] + mu.u[0] * t + mu.inn[0] * k; o.y = mu.p[1] + mu.u[1] * t + mu.inn[1] * k;
+  guardar(); pintar(); llenarEdit();
+};
+$('edRest').onclick = () => {
+  const o = item(sel), c = o && CAT[o.id]; if (!c) return;
+  Object.assign(o, { n: c.n, w: c.w / 100, d: c.d / 100, h: c.h / 100, e: (c.e || 0) / 100, c: c.c });
+  guardar(); pintar(); llenarEdit();
+};
+
+function copiarA(lista, destino) {
+  const N = neg(destino), nombre = def(destino).n;
+  for (const o of lista) {
+    const c = Object.assign({}, o, { uid: uid() });
+    N.items.push(c);
+    const libre = c.x != null && revisarUno(N, c);
+    if (!libre) { c.x = null; c.y = null; const prueba = Object.assign({}, c); acomodar(G, [prueba], N.items.filter(p => p.uid !== c.uid)); if (prueba.x != null) Object.assign(c, prueba); else buscarLugar(G, N.items, c) }
+  }
+  guardar();
+  toast(`${lista.length === 1 ? lista[0].n : lista.length + ' muebles'} → ${nombre}`);
+}
+function revisarUno(N, c) { const r = revisar(G, N.items); return r[c.uid] === 'ok' }
+
+/* Lista */
+const marcados = new Set();
+const ESTXT = { ok: 'Cabe', choca: 'Choca', fuera: 'Se sale', sin: 'No entró' };
+function pintarLista() {
+  const N = neg();
+  const area = areaOcupada(N.items);
+  const malos = N.items.filter(o => est[o.uid] !== 'ok').length;
+  $('lsRes').textContent = `${N.items.length} muebles · ocupan ${area.toFixed(2)} de ${G.area.toFixed(2)} m² · ${malos ? malos + ' con problema' : 'todo cabe'}`;
+  const orden = { sin: 0, fuera: 1, choca: 2, ok: 3 };
+  const filas = [...N.items].sort((a, b) => orden[est[a.uid]] - orden[est[b.uid]] || a.n.localeCompare(b.n));
+  $('lsL').innerHTML = filas.map(o => `<div class="lr"><input type="checkbox" data-u="${o.uid}" ${marcados.has(o.uid) ? 'checked' : ''} aria-label="Marcar"><i class="sw" style="background:${o.c}"></i><button class="tx" data-u="${o.uid}"><b>${esc(o.n)}</b><small>${dims(o)}</small></button><span class="tag ${est[o.uid]}">${ESTXT[est[o.uid]]}</span></div>`).join('');
+  $('lsL').querySelectorAll('input').forEach(i => i.onchange = () => { i.checked ? marcados.add(i.dataset.u) : marcados.delete(i.dataset.u); pintarAcc() });
+  $('lsL').querySelectorAll('button.tx').forEach(b => b.onclick = () => {
+    const o = item(b.dataset.u);
+    if (o.x == null) { const ok = acomodarUno(o, neg()); guardar() }
+    sel = o.uid; cerrarHoja(); pintar();
+  });
+  pintarAcc();
+}
+function pintarAcc() {
+  $('lsAcc').hidden = !marcados.size;
+  $('lsN').textContent = `${marcados.size} marcado${marcados.size === 1 ? '' : 's'} · copiar a:`;
+  $('lsCopia').innerHTML = defs().filter(n => n.id !== E.cur).map(n => `<button data-n="${n.id}">${esc(n.n)}</button>`).join('');
+  $('lsCopia').querySelectorAll('button').forEach(b => b.onclick = () => copiarA(neg().items.filter(o => marcados.has(o.uid)), b.dataset.n));
+}
+$('lsDel').onclick = () => { const N = neg(); N.items = N.items.filter(o => !marcados.has(o.uid)); if (marcados.has(sel)) sel = null; marcados.clear(); guardar(); pintar() };
+
+/* Negocios */
+function resumenNeg(id) {
+  const N = neg(id), r = revisar(G, N.items);
+  const malos = N.items.filter(o => r[o.uid] !== 'ok').length;
+  return { n: N.items.length, malos, pct: Math.round(areaOcupada(N.items) / G.area * 100) };
+}
+function pintarNegs() {
+  $('ngL').innerHTML = defs().map(d => {
+    const r = resumenNeg(d.id);
+    return `<button class="ng" data-n="${d.id}" aria-current="${d.id === E.cur}">${icono(d.ic)}<b>${esc(d.n)}</b><span>${r.n} muebles · ${r.pct}% del piso</span><span class="${r.malos ? 'mal' : 'okk'}">${r.malos ? r.malos + ' no caben' : 'Todo cabe'}</span></button>`;
+  }).join('');
+  $('ngL').querySelectorAll('.ng').forEach(b => b.onclick = () => irNegocio(b.dataset.n));
+  guardar();
+}
+function irNegocio(id) { E.cur = id; sel = null; cerrarHoja(); guardar(); pintar(); v2d.encuadrar() }
+$('titBtn').onclick = () => abrir('hNeg');
+$('ngRe').onclick = () => { if (!confirm(`¿Volver a la propuesta de «${def(E.cur).n}»? Se pierden los cambios de este negocio.`)) return; E.negs[E.cur] = propuesta(E.cur); sel = null; guardar(); pintar(); pintarNegs() };
+$('ngVac').onclick = () => { if (!confirm('¿Quitar todos los muebles de este negocio? El baño se queda.')) return; const N = neg(); N.items = N.items.filter(o => o.k === 'bano'); sel = null; guardar(); pintar(); pintarNegs() };
+$('ngNew').onclick = () => { $('ngForm').hidden = !$('ngForm').hidden; if (!$('ngForm').hidden) { $('ngNom').value = ''; $('ngNom').focus() } };
+$('ngForm').onsubmit = ev => {
+  ev.preventDefault();
+  const n = $('ngNom').value.trim(); if (!n) return;
+  const id = 'x' + uid();
+  const base = neg().items.map(o => Object.assign({}, o));
+  E.extra.push({ id, n, ic: def(E.cur).ic, base });
+  E.negs[id] = { items: base.map(o => Object.assign({}, o, { uid: uid() })) };
+  $('ngForm').hidden = true; irNegocio(id); toast(`Creado «${n}»`);
+};
+
+/* Terreno */
+const TER = { tAB: 'AB', tBC: 'BC', tCD: 'CD', tDA: 'DA', tAC: 'AC', tAl: 'alto' };
+function llenarTer() {
+  for (const [i, k] of Object.entries(TER)) $(i).value = E.plano[k].toFixed(2);
+  $('tMu').value = Math.round(E.plano.muro * 100);
+  datosTer();
+}
+function datosTer() {
+  const a = G.ang;
+  $('tDat').innerHTML = `<div><b>${G.area.toFixed(2)} m²</b><span>Área interior</span></div><div><b>${(G.BD).toFixed(2)} m</b><span>Diagonal BD que debería salir</span></div>` +
+    ['A', 'B', 'C', 'D'].map(k => `<div><b>${a[k].toFixed(2)}°</b><span>Ángulo en ${k}</span></div>`).join('') +
+    `<div class="ancho"><span>Mide la otra diagonal, de B a D. Si te sale ${G.BD.toFixed(2)} m, el plano es exacto; si no, revisa AC.</span></div>`;
+}
+let tTer = 0;
+Object.keys(TER).concat('tMu').forEach(i => $(i).addEventListener('input', () => {
+  const p = Object.assign({}, E.plano);
+  for (const [j, k] of Object.entries(TER)) { const n = num($(j).value); if (n > 0) p[k] = n }
+  const mu = num($('tMu').value); if (mu >= 5 && mu <= 60) p.muro = mu / 100;
+  if (p.alto < 1.8 || p.alto > 6) { $('tErr').textContent = 'La altura debe estar entre 1.80 y 6 m.'; return }
+  const geo = construir(p);
+  if (!geo) { $('tErr').textContent = 'Con esas medidas el terreno no se puede cerrar. Revisa los lados y la diagonal AC.'; return }
+  $('tErr').textContent = '';
+  E.plano = p; G = geo; datosTer();
+  clearTimeout(tTer);
+  tTer = setTimeout(() => { if (v3d) v3d.armarCasa(G, E.plano); v2d.encuadrar(); pintar(); guardar() }, 200);
+}));
+$('tRest').onclick = () => { E.plano = Object.assign({}, PLANO_INICIAL); G = construir(E.plano); if (v3d) v3d.armarCasa(G, E.plano); llenarTer(); v2d.encuadrar(); pintar(); guardar() };
+
+/* Exportar */
+function bajar(nombre, datos, tipo) {
+  const b = datos instanceof Blob ? datos : new Blob([datos], { type: tipo });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = nombre;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove() }, 1500);
+}
+const slug = s => s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+$('exDxf').onclick = () => { const d = def(E.cur); bajar(`plano-${slug(d.n)}.dxf`, generarDXF(G, E.plano, neg().items, `Alquiler - ${d.n}`), 'application/dxf') };
+$('exDxf0').onclick = () => bajar('croquis.dxf', generarDXF(G, E.plano, [], 'Alquiler - croquis'), 'application/dxf');
+$('exPng').onclick = async () => {
+  if (E.vista !== '3d') await modo('3d');
+  if (!v3d) return;
+  setTimeout(() => { const url = v3d.foto(); fetch(url).then(r => r.blob()).then(b => bajar(`3d-${slug(def(E.cur).n)}.png`, b)) }, 600);
+};
+$('exJson').onclick = () => bajar(`alquiler-respaldo.json`, JSON.stringify(E), 'application/json');
+$('exIn').onchange = ev => {
+  const f = ev.target.files[0]; if (!f) return;
+  f.text().then(t => { const v = JSON.parse(t); if (!v.plano || !v.negs) throw 0; aplicarExterno(v); guardar(true); toast('Respaldo cargado'); cerrarHoja() })
+    .catch(() => toast('Ese archivo no es un respaldo de Alquiler'));
+  ev.target.value = '';
+};
+
+/* ---------- Mi ID ---------- */
+function aplicarExterno(v) {
+  const local = { vista: E.vista, tuto: E.tuto, iman: E.iman };
+  E = Object.assign(nuevoEstado(), v, local);
+  G = construir(E.plano) || construir(PLANO_INICIAL);
+  if (!defs().some(d => d.id === E.cur)) E.cur = 'casa';
+  if (sel && !item(sel)) sel = null;
+  if (v3d) v3d.armarCasa(G, E.plano);
+  try { localStorage.setItem(LS, JSON.stringify(E)) } catch (e) {}
+  pintar();
+}
+window.ALQ = {
+  get: () => { const c = Object.assign({}, E); delete c.vista; delete c.tuto; delete c.iman; return c },
+  set: v => { if (v && v.plano && v.negs) aplicarExterno(v) },
+  onChange: null, onIdView: null
+};
+
+/* ---------- Menú ---------- */
+function abrirMenu() { $('menu').classList.add('open'); $('scrim').hidden = false; $('menuBtn').setAttribute('aria-expanded', 'true') }
+function cerrarMenu() { $('menu').classList.remove('open'); $('scrim').hidden = true; $('menuBtn').setAttribute('aria-expanded', 'false') }
+$('menuBtn').onclick = abrirMenu; $('scrim').onclick = cerrarMenu;
+document.querySelectorAll('[data-ir]').forEach(b => b.onclick = () => {
+  const ir = b.dataset.ir;
+  cerrarMenu();
+  if (ir === 'plano') cerrarHoja();
+  else if (ir === 'negocios') abrir('hNeg');
+  else if (ir === 'terreno') abrir('hTer');
+  else if (ir === 'exportar') abrir('hExp');
+  else if (ir === 'mi-id') abrir('hId');
+  else if (ir === 'tutorial') { cerrarHoja(); tutorial() }
+});
+
+/* ---------- Avisos ---------- */
+let tToast = 0;
+function toast(t) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(tToast); tToast = setTimeout(() => { el.hidden = true }, 2400) }
+
+/* ---------- Teclado (Mac / PC) ---------- */
+document.addEventListener('keydown', ev => {
+  if (ev.target.closest && ev.target.closest('input,textarea')) return;
+  if ((ev.metaKey || ev.ctrlKey) && ['+', '-', '=', '0'].includes(ev.key)) { ev.preventDefault(); return }
+  const o = sel && item(sel);
+  if (ev.key === 'Escape') { if (abierta) cerrarHoja(); else seleccionar(null); return }
+  if (!o) return;
+  const p = ev.shiftKey ? 0.1 : 0.01;
+  const mov = { ArrowLeft: [-p, 0], ArrowRight: [p, 0], ArrowUp: [0, -p], ArrowDown: [0, p] }[ev.key];
+  if (mov) { ev.preventDefault(); o.x += mov[0]; o.y += mov[1]; guardar(); pintar(); return }
+  if (ev.key === 'Delete' || ev.key === 'Backspace') { ev.preventDefault(); $('sbDel').click() }
+  if (ev.key === 'r' || ev.key === 'R') rotar(ev.shiftKey ? -90 : 90);
+});
+
+/* ---------- Sin zoom y aviso al recargar ---------- */
+['gesturestart', 'gesturechange', 'gestureend'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
+document.addEventListener('touchmove', e => { if (e.scale && e.scale !== 1) e.preventDefault() }, { passive: false });
+document.addEventListener('wheel', e => { if (e.ctrlKey && !e.target.closest('#v2d,#v3d')) e.preventDefault() }, { passive: false });
+window.addEventListener('beforeunload', e => { guardar(true); e.preventDefault(); e.returnValue = 'Si recargas, tal vez pierdas el avance que no se guardó.'; return e.returnValue });
+
+/* ---------- Tutorial ---------- */
+function tutorial() {
+  if (E.vista !== '2d') modo('2d');
+  v2d.encuadrar();
+  const ej = () => neg().items.find(o => o.x != null && o.k !== 'bano' && o.w * o.d > 0.25) || neg().items.find(o => o.x != null);
+  const elDe = o => o && document.querySelector(`#v2d [data-uid="${o.uid}"]`);
+  const pasos = [
+    { tx: 'Arrastra los muebles con el dedo o el mouse.', el: () => elDe(ej()), anim: 'arrastra' },
+    { tx: 'Tócalo para ver sus medidas y cambiarlas.', el: () => elDe(ej()), anim: 'toca', antes: () => { const o = ej(); if (o) seleccionar(o.uid) } },
+    { tx: 'Gíralo con estos botones o con el círculo azul.', el: () => $('sbDer'), anim: 'toca' },
+    { tx: 'En 3D ves lo mismo, en el mismo lugar.', el: () => $('b3d'), anim: 'toca', antes: () => seleccionar(null) },
+    { tx: 'Elige un negocio y mira si todo cabe.', el: () => $('titBtn'), anim: 'toca' },
+    { tx: 'Agrega más muebles de Sodimac, Promart y otras tiendas.', el: () => $('bAdd'), anim: 'toca' }
+  ];
+  let i = 0;
+  const T = $('tuto'), M = $('mano'), Gl = $('globo');
+  T.hidden = false;
+  const paso = () => {
+    const p = pasos[i]; if (p.antes) p.antes();
+    requestAnimationFrame(() => {
+      const el = p.el(); const r = el ? el.getBoundingClientRect() : { left: innerWidth / 2, top: innerHeight / 2, width: 0, height: 0 };
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      M.style.transform = `translate(${cx - 22}px, ${cy - 9}px)`;
+      M.className = 'mano ' + p.anim;
+      $('globoTx').textContent = p.tx;
+      Gl.style.bottom = cy > innerHeight * 0.55 ? 'auto' : ''; Gl.style.top = cy > innerHeight * 0.55 ? `calc(70px + env(safe-area-inset-top,0px))` : '';
+      $('tSig').textContent = i === pasos.length - 1 ? 'Listo' : 'Siguiente';
+    });
+  };
+  const fin = () => { T.hidden = true; E.tuto = 1; guardar() };
+  $('tSig').onclick = () => { i++; if (i >= pasos.length) fin(); else paso() };
+  $('tSalta').onclick = fin;
+  paso();
+}
+
+/* ---------- Inicio ---------- */
+$('bIman').setAttribute('aria-pressed', E.iman);
+neg();
+pintar();
+modo(E.vista === '3d' ? '3d' : '2d');
+import('../sync.js?v=' + VERSION).catch(() => {});
+if (!E.tuto) setTimeout(tutorial, 450);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => v3d && v3d.tema());

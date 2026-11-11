@@ -1,1 +1,214 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Alquiler</title>
+<meta name="description" content="Simula el local en 2D y 3D con muebles de medidas reales y mira qué negocio entra mejor.">
+<meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12161b" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Alquiler">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="logo.svg?v=1.0.0" type="image/svg+xml">
+<link rel="icon" href="logo-32.png?v=1.0.0" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="logo-180.png?v=1.0.0" sizes="180x180">
+<link rel="manifest" href="manifest.webmanifest?v=1.0.0">
+<meta property="og:title" content="Alquiler">
+<meta property="og:description" content="El local en 2D y 3D con muebles de medidas reales.">
+<meta property="og:image" content="https://la86926.github.io/alquiler/logo-512.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="app.css?v=1.0.0">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<header class="top">
+  <button class="ib" id="menuBtn" aria-label="Abrir menú" aria-controls="menu" aria-expanded="false"><svg viewBox="0 0 22 22" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h14M4 11h14M4 15h14"/></svg></button>
+  <button class="tit" id="titBtn" aria-label="Elegir negocio"><span id="titIc" class="tic"></span><span id="titTx">Bodega</span><svg class="chev" viewBox="0 0 12 12" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5l3 3 3-3"/></svg></button>
+  <div class="seg" role="tablist" aria-label="Dimensión">
+    <button role="tab" id="b2d" aria-selected="true">2D</button>
+    <button role="tab" id="b3d" aria-selected="false">3D</button>
+  </div>
+</header>
 
+<main id="lienzo">
+  <svg id="v2d" class="vista" xmlns="http://www.w3.org/2000/svg" aria-label="Plano 2D"></svg>
+  <div id="v3d" class="vista" hidden aria-label="Vista 3D"></div>
+
+  <div class="flot der" id="ctl2d">
+    <button class="fb" id="zIn" aria-label="Acercar"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M10 5v10M5 10h10"/></svg></button>
+    <button class="fb" id="zOut" aria-label="Alejar"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M5 10h10"/></svg></button>
+    <button class="fb" id="zFit" aria-label="Ver todo"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V4h4M16 8V4h-4M4 12v4h4M16 12v4h-4"/></svg></button>
+    <button class="fb" id="bMedir" aria-label="Medir distancia" aria-pressed="false"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="7" width="15" height="6" rx="1.2"/><path d="M6 7v2.5M9 7v1.6M12 7v2.5M15 7v1.6"/></svg></button>
+  </div>
+  <div class="flot der" id="ctl3d" hidden>
+    <button class="fb" data-v="iso" aria-label="Vista general"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linejoin="round"><path d="M10 2.8l6.5 3.6v7.2L10 17.2l-6.5-3.6V6.4z"/><path d="M3.5 6.4L10 10l6.5-3.6M10 10v7.2"/></svg></button>
+    <button class="fb" data-v="calle" aria-label="Desde la calle"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16V8l7-4 7 4v8"/><path d="M7 16v-5h6v5"/></svg></button>
+    <button class="fb" data-v="dentro" aria-label="Adentro"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="5.2" r="2.2"/><path d="M10 8v5M7 17l3-4 3 4M6.5 10.5h7"/></svg></button>
+    <button class="fb" data-v="arriba" aria-label="Desde arriba"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linejoin="round"><path d="M3.5 4.5h13v11h-13z"/><path d="M3.5 9h6v6.5" stroke-linecap="round"/></svg></button>
+    <button class="fb" id="bMuros" aria-label="Bajar o subir las paredes"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linejoin="round"><path d="M3 16.5h14M5 16.5V7h4v9.5M11 16.5v-5h4v5"/></svg></button>
+  </div>
+
+  <button class="pill" id="pill"><i></i><span id="pillTx"></span></button>
+
+  <div class="selbar" id="selbar" hidden>
+    <button class="sb-n" id="sbInfo"><b id="sbNom"></b><span id="sbDim"></span></button>
+    <div class="sb-b">
+      <button class="fb" id="sbIzq" aria-label="Girar a la izquierda 15°"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5.2 8.2A5.6 5.6 0 1 1 5 12.5"/><path d="M4.6 4.4v4h4"/></svg></button>
+      <button class="fb" id="sbDer" aria-label="Girar a la derecha 15°"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.8 8.2A5.6 5.6 0 1 0 15 12.5"/><path d="M15.4 4.4v4h-4"/></svg></button>
+      <button class="fb" id="sbMed" aria-label="Medidas"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15.5L15.5 3l1.5 1.5L4.5 17z"/><path d="M6 12.5l1.3 1.3M8.2 10.3l1 1M10.4 8.1l1.3 1.3M12.6 5.9l1 1"/></svg></button>
+      <button class="fb" id="sbDup" aria-label="Duplicar"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linejoin="round"><rect x="6.5" y="6.5" width="10" height="10" rx="2"/><path d="M13.5 6.5V5a1.5 1.5 0 0 0-1.5-1.5H5A1.5 1.5 0 0 0 3.5 5v7A1.5 1.5 0 0 0 5 13.5h1.5"/></svg></button>
+      <button class="fb rojo" id="sbDel" aria-label="Quitar"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h12M8 6V4.5h4V6M6 6l.7 10h6.6L14 6"/></svg></button>
+    </div>
+  </div>
+
+  <nav class="barra">
+    <button class="bb prim" id="bAdd"><svg viewBox="0 0 20 20" fill="none" stroke-width="2" stroke-linecap="round"><path d="M10 4.5v11M4.5 10h11"/></svg>Agregar</button>
+    <button class="bb" id="bLista"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.7" stroke-linecap="round"><path d="M7.5 6h9M7.5 10h9M7.5 14h9"/><circle cx="4" cy="6" r=".6" fill="currentColor"/><circle cx="4" cy="10" r=".6" fill="currentColor"/><circle cx="4" cy="14" r=".6" fill="currentColor"/></svg>Lista</button>
+    <button class="bb" id="bIman" aria-pressed="true"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5v6.5a5 5 0 0 0 10 0V3.5h-3.2V10a1.8 1.8 0 0 1-3.6 0V3.5z"/><path d="M5 6.5h3.2M11.8 6.5H15"/></svg>Imán</button>
+  </nav>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<!-- Menú lateral -->
+<div class="scrim" id="scrim" hidden></div>
+<aside class="menu" id="menu" aria-label="Menú">
+  <div class="mhead"><span class="logo" aria-hidden="true"><svg viewBox="0 0 64 64"><use href="#logoG"/></svg></span><b>Alquiler</b><span class="mv">v1.0.0</span></div>
+  <nav class="mnav">
+    <button data-ir="plano" aria-current="page"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linejoin="round"><path d="M4.2 3.5h10.2l-1.5 13H2.7z"/><path d="M4 9.5h4.5v7" stroke-linecap="round"/></svg>Plano</button>
+    <button data-ir="negocios"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l1.4-4.5h11.2L17 8"/><path d="M3 8a2.3 2.3 0 0 0 4.7 0 2.3 2.3 0 0 0 4.6 0A2.3 2.3 0 0 0 17 8"/><path d="M4.2 10.2V16.5h11.6v-6.3M8.5 16.5v-3.5h3v3.5"/></svg>Negocios</button>
+    <button data-ir="terreno"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 4h13M3.5 2.5v3M16.5 2.5v3"/><path d="M5 8.5h10.5L14 17H3.5z"/></svg>Medidas del terreno</button>
+    <button data-ir="exportar"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v9.5M6.5 9l3.5 3.5L13.5 9"/><path d="M4 13.5v2A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5v-2"/></svg>Exportar · AutoCAD</button>
+    <button data-ir="mi-id"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="7" r="3.3"/><path d="M3.8 17c.8-3.2 3.3-5 6.2-5s5.4 1.8 6.2 5"/></svg>Mi ID<i class="dot" id="idDot" hidden></i></button>
+    <button data-ir="tutorial"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9.5V4.8a1.4 1.4 0 0 1 2.8 0v4.4l3.6.8a1.7 1.7 0 0 1 1.3 1.9l-.6 3.6a2 2 0 0 1-2 1.7H9.6a2 2 0 0 1-1.6-.8L4.9 12.6a1.3 1.3 0 0 1 1.9-1.7L8 12"/></svg>Ver tutorial</button>
+  </nav>
+</aside>
+
+<!-- Hojas -->
+<div class="hoja-bg" id="hojaBg" hidden></div>
+
+<section class="hoja" id="hCat" hidden aria-label="Agregar mueble">
+  <div class="h-top"><h2>Agregar</h2><button class="x" data-cerrar aria-label="Cerrar"><svg viewBox="0 0 16 16" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+  <input class="in" id="catQ" type="search" placeholder="Buscar mueble" autocomplete="off" aria-label="Buscar mueble">
+  <div class="chips" id="catG"></div>
+  <div class="cat" id="catL"></div>
+</section>
+
+<section class="hoja" id="hEdit" hidden aria-label="Medidas del mueble">
+  <div class="h-top"><h2 id="edTit">Medidas</h2><button class="x" data-cerrar aria-label="Cerrar"><svg viewBox="0 0 16 16" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+  <label class="fl"><span>Nombre</span><input class="in" id="edN" maxlength="44" autocomplete="off"></label>
+  <div class="g3">
+    <label class="fl"><span>Ancho</span><div class="num"><input class="in" id="edW" inputmode="decimal" autocomplete="off"><i>cm</i></div></label>
+    <label class="fl"><span>Fondo</span><div class="num"><input class="in" id="edD" inputmode="decimal" autocomplete="off"><i>cm</i></div></label>
+    <label class="fl"><span>Alto</span><div class="num"><input class="in" id="edH" inputmode="decimal" autocomplete="off"><i>cm</i></div></label>
+  </div>
+  <div class="g3">
+    <label class="fl"><span>Sobre el piso</span><div class="num"><input class="in" id="edE" inputmode="decimal" autocomplete="off"><i>cm</i></div></label>
+    <label class="fl"><span>Giro</span><div class="num"><input class="in" id="edR" inputmode="decimal" autocomplete="off"><i>°</i></div></label>
+    <div class="fl"><span>&nbsp;</span><button class="b2" id="edAlin">Pegar a pared</button></div>
+  </div>
+  <div class="fl"><span>Color</span><div class="colores" id="edC"></div></div>
+  <p class="fuente" id="edF"></p>
+  <div class="dist" id="edDist"></div>
+  <div class="fl"><span>Copiar a otro negocio</span><div class="chips" id="edCopia"></div></div>
+  <button class="lnk" id="edRest">Volver a las medidas de tienda</button>
+</section>
+
+<section class="hoja" id="hLista" hidden aria-label="Lista de muebles">
+  <div class="h-top"><h2>Lista</h2><button class="x" data-cerrar aria-label="Cerrar"><svg viewBox="0 0 16 16" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+  <p class="resumen" id="lsRes"></p>
+  <div class="lista" id="lsL"></div>
+  <div class="lsacc" id="lsAcc" hidden>
+    <span id="lsN"></span>
+    <div class="chips" id="lsCopia"></div>
+    <button class="lnk rojo" id="lsDel">Quitar los marcados</button>
+  </div>
+</section>
+
+<section class="hoja" id="hNeg" hidden aria-label="Negocios">
+  <div class="h-top"><h2>Negocios</h2><button class="x" data-cerrar aria-label="Cerrar"><svg viewBox="0 0 16 16" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+  <div class="negs" id="ngL"></div>
+  <div class="ngacc">
+    <button class="b2" id="ngRe">Volver a la propuesta</button>
+    <button class="b2" id="ngVac">Vaciar</button>
+    <button class="b2" id="ngNew">Guardar como nuevo</button>
+  </div>
+  <form class="ngnew" id="ngForm" hidden autocomplete="off"><input class="in" id="ngNom" maxlength="30" placeholder="Nombre del negocio"><button class="b1" type="submit">Crear</button></form>
+</section>
+
+<section class="hoja" id="hTer" hidden aria-label="Medidas del terreno">
+  <div class="h-top"><h2>Medidas del terreno</h2><button class="x" data-cerrar aria-label="Cerrar"><svg viewBox="0 0 16 16" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+  <div class="g3">
+    <label class="fl"><span>AB · portón</span><div class="num"><input class="in" id="tAB" inputmode="decimal"><i>m</i></div></label>
+    <label class="fl"><span>BC · derecha</span><div class="num"><input class="in" id="tBC" inputmode="decimal"><i>m</i></div></label>
+    <label class="fl"><span>CD · fondo</span><div class="num"><input class="in" id="tCD" inputmode="decimal"><i>m</i></div></label>
+    <label class="fl"><span>DA · izquierda</span><div class="num"><input class="in" id="tDA" inputmode="decimal"><i>m</i></div></label>
+    <label class="fl"><span>AC · diagonal</span><div class="num"><input class="in" id="tAC" inputmode="decimal"><i>m</i></div></label>
+    <label class="fl"><span>Altura</span><div class="num"><input class="in" id="tAl" inputmode="decimal"><i>m</i></div></label>
+    <label class="fl"><span>Muro</span><div class="num"><input class="in" id="tMu" inputmode="decimal"><i>cm</i></div></label>
+  </div>
+  <p class="ferr" id="tErr"></p>
+  <div class="datos" id="tDat"></div>
+  <button class="lnk" id="tRest">Volver a las medidas del croquis</button>
+</section>
+
+<section class="hoja" id="hExp" hidden aria-label="Exportar">
+  <div class="h-top"><h2>Exportar</h2><button class="x" data-cerrar aria-label="Cerrar"><svg viewBox="0 0 16 16" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+  <button class="opt" id="exDxf"><b>Plano para AutoCAD (.dxf)</b><span id="exDxfS">Este negocio, con muros, baño y muebles</span></button>
+  <button class="opt" id="exDxf0"><b>Croquis vacío (.dxf)</b><span>Solo muros y portón</span></button>
+  <button class="opt" id="exPng"><b>Imagen 3D (.png)</b><span>Lo que se ve ahora en 3D</span></button>
+  <button class="opt" id="exJson"><b>Respaldo (.json)</b><span>Todos los negocios y el terreno</span></button>
+  <label class="opt"><b>Cargar respaldo</b><span>Abre un .json guardado antes</span><input type="file" id="exIn" accept=".json,application/json" hidden></label>
+  <p class="nota">AutoCAD abre el .dxf directamente; con «Guardar como» lo pasas a .dwg. Unidades en metros.</p>
+</section>
+
+<section class="hoja" id="hId" hidden aria-label="Mi ID">
+  <div class="h-top"><h2>Mi ID</h2><button class="x" data-cerrar aria-label="Cerrar"><svg viewBox="0 0 16 16" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+  <div class="idbox" id="idOff">
+    <p class="lead">Con tu ID ves tus planos y muebles en todos tus dispositivos.</p>
+    <form class="idbox" id="idForm" autocomplete="off">
+      <input class="in idin" id="idIn" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="28" placeholder="Tu ID" aria-label="Tu ID">
+      <div class="idbtns"><button class="b1" type="submit" id="idGo">Entrar</button><button class="b2" type="button" id="idNew">Crear</button><button class="lnk" type="button" id="idRenOff">Cambiar ID</button></div>
+    </form>
+    <form class="idbox" id="renOffForm" autocomplete="off" hidden>
+      <input class="in idin" id="renOld" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="28" placeholder="ID actual" aria-label="ID actual">
+      <input class="in idin" id="renNew" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="28" placeholder="ID nuevo" aria-label="ID nuevo">
+      <div class="idbtns"><button class="b1" type="submit" id="renOffGo">Cambiar</button><button class="lnk" type="button" id="renOffCancel">Cancelar</button></div>
+    </form>
+    <p class="ferr" id="idErr" role="alert"></p>
+  </div>
+  <div class="idbox" id="idOn" hidden>
+    <p class="lbl2">Tu ID</p>
+    <div class="idrow"><div class="code" id="idCode"></div><button class="lnk" id="idCopy" type="button">Copiar</button></div>
+    <p class="st" id="idState"><i class="sdot"></i><span id="idStateTx"></span></p>
+    <p class="nota">Quien tenga tu ID puede ver tus planos. No lo compartas.</p>
+    <div class="idbtns"><button class="b2" id="idRen" type="button">Cambiar ID</button><button class="b2 rojo" id="idOut" type="button">Salir</button></div>
+    <form class="idbox" id="renForm" autocomplete="off" hidden>
+      <input class="in idin" id="renIn" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="28" placeholder="ID nuevo" aria-label="ID nuevo">
+      <div class="idbtns"><button class="b1" type="submit" id="renGo">Cambiar</button><button class="lnk" type="button" id="renCancel">Cancelar</button></div>
+    </form>
+    <p class="ferr" id="renErr" role="alert"></p>
+  </div>
+</section>
+
+<!-- Tutorial -->
+<div class="tuto" id="tuto" hidden>
+  <div class="mano" id="mano"><svg viewBox="0 0 48 48"><path d="M17 22V9.5a3.2 3.2 0 0 1 6.4 0V20l8.6 2a4 4 0 0 1 3.1 4.5l-1.4 8.4a4.6 4.6 0 0 1-4.6 3.9H21a4.6 4.6 0 0 1-3.7-1.9l-7.2-9.6a3 3 0 0 1 4.4-4L17 26" fill="#fff" stroke="#16202a" stroke-width="2" stroke-linejoin="round"/></svg></div>
+  <div class="globo" id="globo"><p id="globoTx"></p><div class="gb"><button class="lnk" id="tSalta">Saltar</button><button class="b1" id="tSig">Siguiente</button></div></div>
+</div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs><g id="logoG"><path d="M21 8.5h34.5L42 55.5 8.5 47.5z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M21 8.5h34.5" stroke="#2f6fdb" stroke-width="5.5" stroke-linecap="round"/><path d="M33 52.6l2.3-12.4 9.2 1.7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g></defs>
+</svg>
+
+<script type="module" src="js/app.js?v=1.0.0"></script>
+</body>
+</html>
