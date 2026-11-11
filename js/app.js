@@ -1,9 +1,9 @@
-import { CAT, NEGOCIOS, FUENTES, COL } from './catalogo.js';
-import { PLANO_INICIAL, construir, revisar, iman, acomodar, buscarLugar, areaOcupada, distanciaMuros } from './plano.js';
-import { crearVista2D } from './vista2d.js';
-import { generarDXF } from './dxf.js';
+import { CAT, NEGOCIOS, FUENTES, COL } from './catalogo.js?v=1.1.0';
+import { PLANO_INICIAL, ETQ, esCroquisViejo, construir, revisar, iman, acomodar, buscarLugar, areaOcupada, distanciaMuros } from './plano.js?v=1.1.0';
+import { crearVista2D } from './vista2d.js?v=1.1.0';
+import { generarDXF } from './dxf.js?v=1.1.0';
 
-const VERSION = '1.0.1';
+const VERSION = '1.1.0';
 const LS = 'alq-estado-v1';
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -35,9 +35,29 @@ const IC = {
 const icono = k => `<svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${IC[k] || IC.casa}</svg>`;
 
 /* ---------- Estado ---------- */
-function nuevoEstado() { return { v: 1, plano: Object.assign({}, PLANO_INICIAL), cur: 'casa', negs: {}, extra: [], vista: '2d', iman: true, fijo2d: false, fijo3d: true, tuto: 0, t: Date.now() } }
+function nuevoEstado() { return { v: 1, ter: 2, plano: Object.assign({}, PLANO_INICIAL), cur: 'casa', negs: {}, extra: [], vista: '2d', iman: true, fijo2d: false, fijo3d: true, tuto: 0, t: Date.now() } }
+/* Terreno nuevo MBCN (la mitad derecha del croquis): si lo guardado tiene el croquis completo,
+   se cambia el terreno y se vuelven a ubicar todos los muebles. */
+function migrar(e) {
+  if (!e || (e.ter || 1) >= 2) return false;
+  e.ter = 2;
+  if (!esCroquisViejo(e.plano)) return false;           // medidas propias del usuario: no se tocan
+  for (const k of ['AB', 'BC', 'CD', 'DA', 'AC']) e.plano[k] = PLANO_INICIAL[k];
+  const g = construir(e.plano);
+  const propios = new Set((e.extra || []).map(d => d.id));
+  for (const id of Object.keys(e.negs || {})) {
+    if (!propios.has(id)) { delete e.negs[id]; continue }   // los negocios de la web vuelven a su propuesta, ya acomodada
+    const items = e.negs[id].items || [];
+    for (const o of items) { o.x = null; o.y = null; o.rot = 0 }
+    acomodar(g, items);                                      // los que no entren quedan en la lista como «No entró»
+  }
+  for (const d of e.extra || []) if (d.base) { for (const o of d.base) { o.x = null; o.y = null; o.rot = 0 } acomodar(g, d.base) }
+  e.t = Date.now();
+  return true;
+}
+let migrado = false;
 function cargar() {
-  try { const e = JSON.parse(localStorage.getItem(LS)); if (e && e.plano && e.negs) return Object.assign(nuevoEstado(), e) } catch (e) {}
+  try { const e = JSON.parse(localStorage.getItem(LS)); if (e && e.plano && e.negs) { migrado = migrar(e); return Object.assign(nuevoEstado(), e) } } catch (e) {}
   return null;
 }
 let E = cargar() || nuevoEstado();
@@ -60,7 +80,7 @@ function propuesta(id) {
   const items = [];
   for (const p of d.items) for (let i = 0; i < p.n; i++) items.push(nuevoItem(p.id, p.z));
   acomodar(G, items);
-  return { items };
+  return { items: items.filter(o => o.x != null) };          // la propuesta solo trae lo que entra en este terreno
 }
 function neg(id = E.cur) {
   if (!E.negs[id]) E.negs[id] = propuesta(id);
@@ -221,7 +241,7 @@ async function modo(m) {
 }
 async function asegurar3D() {
   if (v3d) return v3d;
-  if (!cargando3d) cargando3d = import('./vista3d.js').then(m => {
+  if (!cargando3d) cargando3d = import('./vista3d.js?v=1.1.0').then(m => {
     v3d = m.crearVista3D($('v3d'), { item, seleccionar: u => seleccionar(u), arrastrar, fijo: () => fijo(), anguloEl: $('bAng') });
     v3d.armarCasa(G, E.plano); v3d.mostrar(true); v3d.vista('iso', false);
     return v3d;
@@ -272,6 +292,7 @@ function abrir(id) {
   if (id === 'hLista') { marcados.clear(); pintarLista() }
   if (id === 'hNeg') pintarNegs();
   if (id === 'hTer') llenarTer();
+  if (id === 'hCero') { const N = neg(); $('ceroTx').textContent = `Se quitan los ${N.items.length} muebles de «${def(E.cur).n}». Los otros negocios no cambian.`; $('ceroBano').hidden = !N.items.some(o => o.k === 'bano') }
   if (id === 'hExp') $('exDxfS').textContent = `${def(E.cur).n}: muros, baño y muebles`;
   if (id === 'hId' && window.ALQ.onIdView) window.ALQ.onIdView();
 }
@@ -422,7 +443,18 @@ function pintarNegs() {
 function irNegocio(id) { E.cur = id; sel = null; cerrarHoja(); guardar(); pintar(); v2d.encuadrar() }
 $('titBtn').onclick = () => abrir('hNeg');
 $('ngRe').onclick = () => { if (!confirm(`¿Volver a la propuesta de «${def(E.cur).n}»? Se pierden los cambios de este negocio.`)) return; E.negs[E.cur] = propuesta(E.cur); sel = null; guardar(); pintar(); pintarNegs() };
-$('ngVac').onclick = () => { if (!confirm('¿Quitar todos los muebles de este negocio? El baño se queda.')) return; const N = neg(); N.items = N.items.filter(o => o.k === 'bano'); sel = null; guardar(); pintar(); pintarNegs() };
+$('ngVac').onclick = () => abrir('hCero');
+/* Empezar de cero: quita los muebles que vienen por defecto para armar el plano propio */
+function vaciar(dejarBano) {
+  const N = neg(), antes = N.items.length;
+  N.items = dejarBano ? N.items.filter(o => o.k === 'bano') : [];
+  sel = null; cerrarHoja(); guardar(); pintar();
+  if (antes) toast(dejarBano ? 'Solo quedó el baño. Toca Agregar para poner tus muebles.' : 'Plano vacío. Toca Agregar para poner tus muebles.');
+  const b = $('bAdd'); b.classList.remove('late'); void b.offsetWidth; b.classList.add('late');
+}
+$('lsCero').onclick = () => abrir('hCero');
+$('ceroTodo').onclick = () => vaciar(false);
+$('ceroBano').onclick = () => vaciar(true);
 $('ngNew').onclick = () => { $('ngForm').hidden = !$('ngForm').hidden; if (!$('ngForm').hidden) { $('ngNom').value = ''; $('ngNom').focus() } };
 $('ngForm').onsubmit = ev => {
   ev.preventDefault();
@@ -443,9 +475,9 @@ function llenarTer() {
 }
 function datosTer() {
   const a = G.ang;
-  $('tDat').innerHTML = `<div><b>${G.area.toFixed(2)} m²</b><span>Área interior</span></div><div><b>${(G.BD).toFixed(2)} m</b><span>Diagonal BD que debería salir</span></div>` +
-    ['A', 'B', 'C', 'D'].map(k => `<div><b>${a[k].toFixed(2)}°</b><span>Ángulo en ${k}</span></div>`).join('') +
-    `<div class="ancho"><span>Mide la otra diagonal, de B a D. Si te sale ${G.BD.toFixed(2)} m, el plano es exacto; si no, revisa AC.</span></div>`;
+  $('tDat').innerHTML = `<div><b>${G.area.toFixed(2)} m²</b><span>Área interior</span></div><div><b>${(G.BD).toFixed(2)} m</b><span>Diagonal BN que debería salir</span></div>` +
+    ['A', 'B', 'C', 'D'].map(k => `<div><b>${a[k].toFixed(2)}°</b><span>Ángulo en ${ETQ[k]}</span></div>`).join('') +
+    `<div class="ancho"><span>Mide la otra diagonal, de B a N. Si te sale ${G.BD.toFixed(2)} m, el plano es exacto; si no, revisa MC.</span></div>`;
 }
 let tTer = 0;
 Object.keys(TER).concat('tMu').forEach(i => $(i).addEventListener('input', () => {
@@ -454,7 +486,7 @@ Object.keys(TER).concat('tMu').forEach(i => $(i).addEventListener('input', () =>
   const mu = num($('tMu').value); if (mu >= 5 && mu <= 60) p.muro = mu / 100;
   if (p.alto < 1.8 || p.alto > 6) { $('tErr').textContent = 'La altura debe estar entre 1.80 y 6 m.'; return }
   const geo = construir(p);
-  if (!geo) { $('tErr').textContent = 'Con esas medidas el terreno no se puede cerrar. Revisa los lados y la diagonal AC.'; return }
+  if (!geo) { $('tErr').textContent = 'Con esas medidas el terreno no se puede cerrar. Revisa los lados y la diagonal MC.'; return }
   $('tErr').textContent = '';
   E.plano = p; G = geo; datosTer();
   clearTimeout(tTer);
@@ -487,6 +519,7 @@ $('exIn').onchange = ev => {
 /* ---------- Mi ID ---------- */
 function aplicarExterno(v) {
   const local = { vista: E.vista, tuto: E.tuto, iman: E.iman, fijo2d: E.fijo2d, fijo3d: E.fijo3d };
+  const mig = migrar(v);
   E = Object.assign(nuevoEstado(), v, local);
   G = construir(E.plano) || construir(PLANO_INICIAL);
   if (!defs().some(d => d.id === E.cur)) E.cur = 'casa';
@@ -494,6 +527,7 @@ function aplicarExterno(v) {
   if (v3d) v3d.armarCasa(G, E.plano);
   try { localStorage.setItem(LS, JSON.stringify(E)) } catch (e) {}
   pintar();
+  if (mig) { v2d.encuadrar(); guardar(true) }               // lo migrado también se sube a tu ID
 }
 window.ALQ = {
   get: () => { const c = Object.assign({}, E); delete c.vista; delete c.tuto; delete c.iman; delete c.fijo2d; delete c.fijo3d; return c },
@@ -556,7 +590,8 @@ function tutorial() {
     { tx: 'El candado fija todos los muebles. En 2D empieza abierto para moverlos; en 3D empieza cerrado para que no muevas nada sin querer.', el: () => $('bFijo'), anim: 'toca' },
     { tx: 'En 3D ves lo mismo, en el mismo lugar. Para mover ahí, abre el candado.', el: () => $('b3d'), anim: 'toca', antes: () => seleccionar(null) },
     { tx: 'Elige un negocio y mira si todo cabe.', el: () => $('titBtn'), anim: 'toca' },
-    { tx: 'Agrega más muebles de Sodimac, Promart y otras tiendas.', el: () => $('bAdd'), anim: 'toca' }
+    { tx: '¿Prefieres armarlo tú? En la Lista, «Empezar de cero» quita los muebles que vienen por defecto.', el: () => $('lsCero'), anim: 'toca', antes: () => abrir('hLista') },
+    { tx: 'Luego agrega los tuyos, con medidas de Sodimac, Promart y otras tiendas.', el: () => $('bAdd'), anim: 'toca', antes: () => cerrarHoja() }
   ];
   let i = 0;
   const T = $('tuto'), M = $('mano'), Gl = $('globo');
@@ -573,7 +608,7 @@ function tutorial() {
       $('tSig').textContent = i === pasos.length - 1 ? 'Listo' : 'Siguiente';
     });
   };
-  const fin = () => { T.hidden = true; E.tuto = 1; guardar() };
+  const fin = () => { T.hidden = true; E.tuto = 1; cerrarHoja(); guardar() };
   $('tSig').onclick = () => { i++; if (i >= pasos.length) fin(); else paso() };
   $('tSalta').onclick = fin;
   paso();
@@ -584,6 +619,7 @@ $('bIman').setAttribute('aria-pressed', E.iman);
 neg();
 pintar();
 modo(E.vista === '3d' ? '3d' : '2d');
+if (migrado) { guardar(true); setTimeout(() => toast('Terreno nuevo: MBCN. Los muebles se volvieron a ubicar.'), 600) }
 import('../sync.js?v=' + VERSION).catch(() => {});
 if (!E.tuto) setTimeout(tutorial, 450);
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => v3d && v3d.tema());

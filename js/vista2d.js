@@ -1,5 +1,5 @@
-/* Vista 2D (SVG) en metros. El portón (AB) queda arriba, como en el croquis. */
-import { anilloMuros, esquinas } from './plano.js';
+/* Vista 2D (SVG) en metros. El portón (MB) queda arriba, como en el croquis. */
+import { anilloMuros, esquinas, ETQ } from './plano.js?v=1.1.0';
 
 const NS = 'http://www.w3.org/2000/svg';
 const f2 = n => n.toFixed(2);
@@ -103,12 +103,12 @@ export function crearVista2D(svg, cb) {
     for (const mu of g.muros) {
       const mx = (mu.p[0] + mu.q[0]) / 2 + mu.out[0] * (plano.muro + 22 / s), my = (mu.p[1] + mu.q[1]) / 2 + mu.out[1] * (plano.muro + 22 / s);
       let a = Math.atan2(mu.u[1], mu.u[0]) * 180 / Math.PI; if (a > 90 || a < -90) a += 180;
-      h += `<text class="cota" font-size="${f2(fs)}" transform="translate(${f2(mx)} ${f2(my)}) rotate(${a.toFixed(2)})" dy=".35em">${mu.id} = ${mu.L.toFixed(2)} m${mu.abierto ? ' · portón' : ''}</text>`;
+      h += `<text class="cota" font-size="${f2(fs)}" transform="translate(${f2(mx)} ${f2(my)}) rotate(${a.toFixed(2)})" dy=".35em">${mu.et} = ${mu.L.toFixed(2)} m${mu.abierto ? ' · portón' : ''}</text>`;
     }
     for (const [n, p] of Object.entries({ A: g.A, B: g.B, C: g.C, D: g.D })) {
       const v = [p[0] - g.centro[0], p[1] - g.centro[1]], L = Math.hypot(...v);
       const q = [p[0] + v[0] / L * (plano.muro + 26 / s), p[1] + v[1] / L * (plano.muro + 26 / s)];
-      h += `<text class="vert" x="${f2(q[0])}" y="${f2(q[1])}" font-size="${f2(fs * 1.25)}" dy=".35em">${n}</text>`;
+      h += `<text class="vert" x="${f2(q[0])}" y="${f2(q[1])}" font-size="${f2(fs * 1.25)}" dy=".35em">${ETQ[n]}</text>`;
       const qa = [p[0] - v[0] / L * 36 / s, p[1] - v[1] / L * 36 / s];
       h += `<text class="ang" x="${f2(qa[0])}" y="${f2(qa[1])}" font-size="${f2(fsL * 0.9)}" dy=".35em">${g.ang[n].toFixed(2)}°</text>`;
     }

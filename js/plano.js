@@ -1,8 +1,17 @@
 /* Geometría del terreno, choques entre muebles y acomodo automático. Todo en metros.
-   Plano: A arriba a la izquierda, B arriba a la derecha (AB = portón, paralelo a la calle).
-   x crece hacia la derecha, y crece hacia adentro de la casa (hacia el fondo DC). */
+   El terreno es MBCN: la mitad derecha del croquis ABCD. M está en AB con MB = 2.40 m y N en DC con NC = 2.40 m;
+   los ángulos en B y C son los del croquis. Por dentro se sigue usando A, B, C, D (A = M, D = N);
+   en pantalla y en AutoCAD se muestran M, B, C, N.
+   Plano: M arriba a la izquierda, B arriba a la derecha (MB = portón, paralelo a la calle).
+   x crece hacia la derecha, y crece hacia adentro de la casa (hacia el fondo NC). */
 
-export const PLANO_INICIAL = { AB: 4.55, BC: 6.55, CD: 4.58, DA: 5.48, AC: 6.90, muro: 0.15, alto: 2.8 };
+// Croquis completo ABCD (antes): de aquí salen M y N
+export const CROQUIS = { AB: 4.55, BC: 6.55, CD: 4.58, DA: 5.48, AC: 6.90 };
+// MB, BC, CN, NM y la diagonal MC (NM y MC calculadas con los ángulos del croquis)
+export const PLANO_INICIAL = { AB: 2.40, BC: 6.55, CD: 2.40, DA: 5.984, AC: 6.342, muro: 0.15, alto: 2.8 };
+export const ETQ = { A: 'M', B: 'B', C: 'C', D: 'N' };
+// ¿Es el plano guardado el croquis viejo (terreno completo)?
+export const esCroquisViejo = p => !!p && ['AB', 'BC', 'CD', 'DA', 'AC'].every(k => Math.abs((p[k] || 0) - CROQUIS[k]) < 0.005);
 
 const rad = g => g * Math.PI / 180, deg = r => r * 180 / Math.PI;
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
@@ -36,6 +45,7 @@ export function construir(p) {
   ];
   const sg = Math.sign(s) || 1; // orientación (en este plano es horaria en pantalla)
   for (const m of muros) {
+    m.et = ETQ[m.id[0]] + ETQ[m.id[1]];
     const v = sub(m.q, m.p), L = len(v);
     m.L = L; m.u = [v[0] / L, v[1] / L];
     m.out = sg > 0 ? [m.u[1], -m.u[0]] : [-m.u[1], m.u[0]]; // normal hacia afuera

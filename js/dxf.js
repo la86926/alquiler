@@ -1,5 +1,5 @@
 /* Exporta el plano a DXF (AutoCAD R12, unidades en metros). AutoCAD lo abre y lo puede guardar como DWG. */
-import { anilloMuros, esquinas } from './plano.js';
+import { anilloMuros, esquinas, ETQ } from './plano.js?v=1.1.0';
 
 const txt = s => String(s).replace(/ñ/g, 'n').replace(/Ñ/g, 'N').replace(/×/g, 'x').replace(/Ø/g, 'D').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]/g, '');
 const n = v => (Math.round(v * 10000) / 10000).toString();
@@ -20,11 +20,11 @@ export function generarDXF(g, plano, items, titulo) {
   for (const mu of g.muros) {
     const m = [(mu.p[0] + mu.q[0]) / 2 + mu.out[0] * (plano.muro + 0.3), (mu.p[1] + mu.q[1]) / 2 + mu.out[1] * (plano.muro + 0.3)];
     let a = Math.atan2(mu.u[1], mu.u[0]) * 180 / Math.PI; if (a > 90 || a < -90) a += 180;
-    texto(m, 0.14, `${mu.id} = ${mu.L.toFixed(2)} m${mu.abierto ? ' (porton)' : ''}`, 'COTAS', a);
+    texto(m, 0.14, `${mu.et} = ${mu.L.toFixed(2)} m${mu.abierto ? ' (porton)' : ''}`, 'COTAS', a);
   }
   for (const [k, p] of Object.entries({ A: g.A, B: g.B, C: g.C, D: g.D })) {
     const v = [p[0] - g.centro[0], p[1] - g.centro[1]], L = Math.hypot(...v);
-    texto([p[0] + v[0] / L * 0.45, p[1] + v[1] / L * 0.45], 0.2, k, 'COTAS');
+    texto([p[0] + v[0] / L * 0.45, p[1] + v[1] / L * 0.45], 0.2, ETQ[k], 'COTAS');
     texto([p[0] - v[0] / L * 0.5, p[1] - v[1] / L * 0.5], 0.09, g.ang[k].toFixed(2) + '%%d', 'COTAS');
   }
   linea(g.A, g.C, 'DIAGONAL');
