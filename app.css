@@ -286,3 +286,17 @@ body.fijo-on .pill .cand{display:block}
 .ceroacc>button{width:100%;min-height:48px}
 .b1.peligro{background:var(--red)}
 .bb.late{animation:late .5s ease}
+
+/* Medidas del terreno sin tapar el plano: se puede mover mientras se escribe */
+body.ter-on .vista{height:auto;bottom:min(48vh,440px)}
+body.ter-on #hTer{max-height:min(48vh,440px);box-shadow:0 -6px 24px rgba(0,0,0,.14)}
+body.ter-on .barra,body.ter-on .selbar,body.ter-on .bang{display:none}
+@media (min-width:860px){
+  body.ter-on .vista{width:auto;bottom:0;right:414px}
+  body.ter-on #hTer{max-height:none}
+  body.ter-on .flot.der,body.ter-on .fijo{right:426px}
+}
+/* calle en 2D */
+.vereda{fill:var(--faint);opacity:.35}
+.borde{stroke:var(--muted);stroke-width:2.5;vector-effect:non-scaling-stroke;opacity:.7}
+.eje{stroke:var(--card);stroke-width:2;stroke-dasharray:10 9;vector-effect:non-scaling-stroke}

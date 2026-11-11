@@ -1,5 +1,5 @@
-/* Vista 2D (SVG) en metros. El portón (MB) queda arriba, como en el croquis. */
-import { anilloMuros, esquinas, ETQ } from './plano.js?v=1.1.5';
+/* Vista 2D (SVG) en metros. El portón (AB) queda arriba, como en el croquis. */
+import { anilloMuros, esquinas, ETQ } from './plano.js?v=1.1.6';
 
 const NS = 'http://www.w3.org/2000/svg';
 const f2 = n => n.toFixed(2);
@@ -15,9 +15,10 @@ export function crearVista2D(svg, cb) {
     if (!g) return;
     const W = svg.clientWidth || 300, H = svg.clientHeight || 300;
     const mx = 1.0, my = 1.0;
-    const w = g.caja.x1 - g.caja.x0 + mx * 2, h = g.caja.y1 - g.caja.y0 + my * 2;
+    const y0 = Math.min(g.caja.y0, -2.6);                     // que se vea el borde de la vereda (la calle)
+    const w = g.caja.x1 - g.caja.x0 + mx * 2, h = g.caja.y1 - y0 + my * 2;
     cam.s = Math.min(W / w, H / h);
-    cam.cx = (g.caja.x0 + g.caja.x1) / 2; cam.cy = (g.caja.y0 + g.caja.y1) / 2;
+    cam.cx = (g.caja.x0 + g.caja.x1) / 2; cam.cy = (y0 + g.caja.y1) / 2;
     aplicarCam();
   }
   function aplicarCam() {
@@ -93,15 +94,19 @@ export function crearVista2D(svg, cb) {
     for (let y = y0; y <= y1; y += 0.5) (Number.isInteger(y) ? d2 += `M${x0} ${y}H${x1}` : d1 += `M${x0} ${y}H${x1}`);
     h += `<path class="g1" d="${d1}"/><path class="g2" d="${d2}"/>`;
     // calle
-    h += `<rect class="calle" x="${x0}" y="${f2(-plano.muro - 3.2)}" width="${x1 - x0}" height="3"/>`;
-    h += `<text class="tcalle" x="${f2((g.A[0] + g.B[0]) / 2)}" y="${f2(-plano.muro - 1.5)}" font-size="${f2(fs)}">Calle</text>`;
+    // vereda (1.60 m), borde de la vereda, pista (7 m) con su línea al medio y el nombre de la calle; igual que en 3D
+    h += `<rect class="vereda" x="${x0}" y="-1.6" width="${x1 - x0}" height="1.6"/>`;
+    h += `<rect class="calle" x="${x0}" y="-8.6" width="${x1 - x0}" height="7"/>`;
+    h += `<line class="borde" x1="${x0}" y1="-1.6" x2="${x1}" y2="-1.6"/><line class="eje" x1="${x0}" y1="-5.1" x2="${x1}" y2="-5.1"/>`;
+    h += `<text class="tcalle" x="${f2((g.A[0] + g.B[0]) / 2)}" y="-2.2" font-size="${f2(fs * 1.1)}">${esc(plano.calle || 'Calle')}</text>`;
     // piso y muros
     h += `<polygon class="piso" points="${g.pts.map(p => p.map(f2).join(',')).join(' ')}"/>`;
     h += `<polygon class="muro" points="${anilloMuros(g, plano.muro).map(p => p.map(f2).join(',')).join(' ')}"/>`;
     h += `<line class="porton" x1="${f2(g.A[0])}" y1="${f2(g.A[1])}" x2="${f2(g.B[0])}" y2="${f2(g.B[1])}"/>`;
     // cotas de muros
     for (const mu of g.muros) {
-      const mx = (mu.p[0] + mu.q[0]) / 2 + mu.out[0] * (plano.muro + 22 / s), my = (mu.p[1] + mu.q[1]) / 2 + mu.out[1] * (plano.muro + 22 / s);
+      const sep = plano.muro + (mu.abierto ? 46 : 22) / s;   // la del portón, más arriba para no chocar con las letras A y B
+      const mx = (mu.p[0] + mu.q[0]) / 2 + mu.out[0] * sep, my = (mu.p[1] + mu.q[1]) / 2 + mu.out[1] * sep;
       let a = Math.atan2(mu.u[1], mu.u[0]) * 180 / Math.PI; if (a > 90 || a < -90) a += 180;
       h += `<text class="cota" font-size="${f2(fs)}" transform="translate(${f2(mx)} ${f2(my)}) rotate(${a.toFixed(2)})" dy=".35em">${mu.et} = ${mu.L.toFixed(2)} m${mu.abierto ? ' · portón' : ''}</text>`;
     }

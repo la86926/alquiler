@@ -148,7 +148,7 @@ export const NEGOCIOS = [
   { id: 'frutas', n: 'Venta de frutas', ic: 'fruta', items: [P('bano', 'bano'), P('balanza', 'frente'), P('exhfrutas', 'pared', 3), P('jabas', 'pared', 6), P('mesaexh', 'centro', 2), P('visi290'), P('congeladora')] }
 ];
 
-/* ---------- Distribución propuesta para el terreno MBCN ----------
+/* ---------- Distribución propuesta para el terreno ABCD ----------
    Unos 2.31 m de ancho y 6.5 m de fondo. El baño va en el fondo, en la esquina C, y se deja un pasillo
    de al menos 0.8 m desde el portón hasta su puerta.
    u = distancia desde el portón medida a lo largo de la pared derecha BC (al centro del mueble);

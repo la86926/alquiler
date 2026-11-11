@@ -1,15 +1,15 @@
 /* Vista 3D (three.js). Mapeo: x del plano → x, altura → y, y del plano → −z. */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { anilloMuros } from './plano.js?v=1.1.5';
-import { construirModelo } from './modelos.js?v=1.1.5';
+import { anilloMuros } from './plano.js?v=1.1.6';
+import { construirModelo } from './modelos.js?v=1.1.6';
 
 const rad = g => g * Math.PI / 180;
 
 export function crearVista3D(cont, cb) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.enabled = false;   // sin sombras: se ve más limpio
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
   cont.appendChild(renderer.domElement);
@@ -25,7 +25,7 @@ export function crearVista3D(cont, cb) {
 
   escena.add(new THREE.HemisphereLight('#ffffff', '#ddd6cb', 1.35));
   const sol = new THREE.DirectionalLight('#fff6ea', 1.5);
-  sol.castShadow = true; sol.shadow.mapSize.set(2048, 2048); sol.shadow.bias = -0.0004; sol.shadow.normalBias = 0.02;
+  sol.castShadow = false;
   escena.add(sol, sol.target);
   escena.add(new THREE.AmbientLight('#ffffff', 0.25));
 
@@ -44,6 +44,24 @@ export function crearVista3D(cont, cb) {
     t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
   }
 
+  /* Letrero que siempre mira a la cámara (letras de las esquinas y nombre de la calle) */
+  function letrero(texto, { alto = 0.42, fondo = 'rgba(255,255,255,.94)', color = '#16202a', borde = 'rgba(22,32,42,.25)' } = {}) {
+    const c = document.createElement('canvas'), x = c.getContext('2d'), H = 96;
+    x.font = '800 56px "Plus Jakarta Sans", system-ui, sans-serif';
+    const W = Math.max(H, Math.ceil(x.measureText(texto).width) + 52);
+    c.width = W; c.height = H;
+    x.font = '800 56px "Plus Jakarta Sans", system-ui, sans-serif';
+    const r = H / 2 - 4;
+    x.fillStyle = fondo; x.strokeStyle = borde; x.lineWidth = 4;
+    x.beginPath(); x.moveTo(4 + r, 4); x.lineTo(W - 4 - r, 4); x.arc(W - 4 - r, H / 2, r, -Math.PI / 2, Math.PI / 2); x.lineTo(4 + r, H - 4); x.arc(4 + r, H / 2, r, Math.PI / 2, Math.PI * 1.5); x.closePath(); x.fill(); x.stroke();
+    x.fillStyle = color; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(texto, W / 2, H / 2 + 3);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true }));
+    sp.scale.set(alto * W / H, alto, 1); sp.renderOrder = 20;
+    return sp;
+  }
+  let letras = [];
+
   function armarCasa(geo, p) {
     g = geo; plano = p;
     casa.clear();
@@ -57,6 +75,19 @@ export function crearVista3D(cont, cb) {
     const pista = new THREE.Mesh(new THREE.PlaneGeometry(vx1 - vx0 + 30, 7), new THREE.MeshStandardMaterial({ color: '#c6c9ce', roughness: 1 }));
     pista.rotation.x = -Math.PI / 2; pista.position.set((vx0 + vx1) / 2, -0.015, 1.6 + 3.5); pista.receiveShadow = true; casa.add(pista);
     for (let i = -6; i < 7; i++) { const l = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.12), new THREE.MeshBasicMaterial({ color: '#f4f4f0' })); l.rotation.x = -Math.PI / 2; l.position.set((vx0 + vx1) / 2 + i * 2.6, -0.01, 5.1); casa.add(l) }
+    // borde de la vereda: la línea que marca el lado de la calle
+    const borde = new THREE.Mesh(new THREE.PlaneGeometry(vx1 - vx0 + 30, 0.1), new THREE.MeshBasicMaterial({ color: '#7d848d' }));
+    borde.rotation.x = -Math.PI / 2; borde.position.set((vx0 + vx1) / 2, 0.003, 1.6); casa.add(borde);
+    // nombre de la calle
+    const nom = letrero(p.calle || 'Calle', { alto: 0.5, fondo: 'rgba(22,32,42,.82)', color: '#ffffff', borde: 'rgba(0,0,0,0)' });
+    nom.position.set((g.A[0] + g.B[0]) / 2, 0.45, 2.4); casa.add(nom);
+    // letras de las esquinas
+    letras = [];
+    for (const k of ['A', 'B', 'C', 'D']) {
+      const q = g[k], v = [q[0] - g.centro[0], q[1] - g.centro[1]], L = Math.hypot(...v) || 1;
+      const sp = letrero(k, { alto: 0.46 }); sp.userData.base = [q[0] + v[0] / L * 0.35, -(q[1] + v[1] / L * 0.35)];
+      casa.add(sp); letras.push(sp);
+    }
     // piso
     const piso = new THREE.Mesh(new THREE.ShapeGeometry(forma(g.pts)), new THREE.MeshStandardMaterial({ map: texturaPiso(), roughness: 0.85 }));
     piso.rotation.x = -Math.PI / 2; piso.receiveShadow = true; casa.add(piso);
@@ -81,6 +112,7 @@ export function crearVista3D(cont, cb) {
   function alturaMuros(f) {
     altoMuros = f;
     if (mallaMuros) mallaMuros.scale.y = f;
+    for (const sp of letras) sp.position.set(sp.userData.base[0], (plano ? plano.alto : 2.8) * f + 0.4, sp.userData.base[1]);
     casa.children.forEach(c => { if (c.userData.porton) c.visible = f > 0.9 });
     sucio = true;
   }

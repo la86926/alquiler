@@ -1,9 +1,9 @@
-import { CAT, NEGOCIOS, FUENTES, COL } from './catalogo.js?v=1.1.5';
-import { PLANO_INICIAL, ETQ, colocar, construir, revisar, iman, acomodar, buscarLugar, areaOcupada, distanciaMuros } from './plano.js?v=1.1.5';
-import { crearVista2D } from './vista2d.js?v=1.1.5';
-import { generarDXF } from './dxf.js?v=1.1.5';
+import { CAT, NEGOCIOS, FUENTES, COL } from './catalogo.js?v=1.1.6';
+import { PLANO_INICIAL, ETQ, colocar, construir, revisar, chocan, iman, acomodar, buscarLugar, areaOcupada, distanciaMuros } from './plano.js?v=1.1.6';
+import { crearVista2D } from './vista2d.js?v=1.1.6';
+import { generarDXF } from './dxf.js?v=1.1.6';
 
-const VERSION = '1.1.5';
+const VERSION = '1.1.6';
 const LS = 'alq-estado-v1';
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -36,13 +36,13 @@ const icono = k => `<svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stro
 
 /* ---------- Estado ---------- */
 function nuevoEstado() { return { v: 1, ter: 4, plano: Object.assign({}, PLANO_INICIAL), cur: 'casa', negs: {}, extra: [], vista: '2d', iman: true, fijo2d: false, fijo3d: true, tuto: 0, t: Date.now() } }
-/* Terreno nuevo MBCN (la mitad derecha del croquis): si lo guardado tiene el croquis completo,
+/* Terreno nuevo ABCD (la mitad derecha del croquis): si lo guardado tiene el croquis completo,
    se cambia el terreno y se vuelven a ubicar todos los muebles. */
 function migrar(e) {
   if (!e || (e.ter || 1) >= 4) return false;
-  // v1.1.5: se empieza de nuevo con el terreno MBCN y la distribución propuesta de cada negocio
+  // v1.1.6: se empieza de nuevo con el terreno ABCD y la distribución propuesta de cada negocio
   e.ter = 4;
-  e.plano = Object.assign({}, PLANO_INICIAL, { muro: e.plano?.muro || PLANO_INICIAL.muro, alto: e.plano?.alto || PLANO_INICIAL.alto });
+  e.plano = Object.assign({}, PLANO_INICIAL, { muro: e.plano?.muro || PLANO_INICIAL.muro, alto: e.plano?.alto || PLANO_INICIAL.alto }, e.plano?.calle ? { calle: e.plano.calle } : {});
   const g = construir(e.plano);
   const propios = new Set((e.extra || []).map(d => d.id));
   const reacomodar = items => { for (const o of items) { o.x = null; o.y = null; o.rot = 0 } acomodar(g, items); return items.filter(o => o.x != null) };
@@ -76,7 +76,7 @@ const zonaDe = id => id === 'bano' ? 'bano' : PARED.has(CAT[id].k) ? 'pared' : '
 function propuesta(id) {
   const d = def(id);
   if (d.base) return { items: d.base.map(o => Object.assign({}, o, { uid: uid() })) };
-  if (d.lay) {                                               // distribución hecha a mano para MBCN
+  if (d.lay) {                                               // distribución hecha a mano para este terreno
     const items = d.lay.map(s => colocar(G, nuevoItem(s.id, s.id === 'bano' ? 'bano' : s.m ? 'pared' : 'centro'), s));
     const r = revisar(G, items), malos = items.filter(o => r[o.uid] !== 'ok');
     if (malos.length) {                                      // con otras medidas del terreno: lo que no calce se acomoda solo
@@ -250,7 +250,7 @@ async function modo(m) {
 }
 async function asegurar3D() {
   if (v3d) return v3d;
-  if (!cargando3d) cargando3d = import('./vista3d.js?v=1.1.5').then(m => {
+  if (!cargando3d) cargando3d = import('./vista3d.js?v=1.1.6').then(m => {
     v3d = m.crearVista3D($('v3d'), { item, seleccionar: u => seleccionar(u), arrastrar, fijo: () => fijo(), anguloEl: $('bAng') });
     v3d.armarCasa(G, E.plano); v3d.mostrar(true); v3d.vista('iso', false);
     return v3d;
@@ -295,7 +295,11 @@ let abierta = null;
 function abrir(id) {
   cerrarMenu();
   if (abierta && abierta !== id) $(abierta).hidden = true;
-  abierta = id; $(id).hidden = false; $('hojaBg').hidden = false;
+  abierta = id; $(id).hidden = false;
+  // Medidas del terreno no tapa el plano: se puede mover y acercar mientras se escribe; se cierra con la X
+  const libre = id === 'hTer', antes = document.body.classList.contains('ter-on');
+  $('hojaBg').hidden = libre; document.body.classList.toggle('ter-on', libre);
+  if (libre !== antes) setTimeout(() => v2d.encuadrar(), 60);
   if (id === 'hCat') llenarCat();
   if (id === 'hEdit') llenarEdit();
   if (id === 'hLista') { marcados.clear(); pintarLista() }
@@ -305,7 +309,10 @@ function abrir(id) {
   if (id === 'hExp') $('exDxfS').textContent = `${def(E.cur).n}: muros, baño y muebles`;
   if (id === 'hId' && window.ALQ.onIdView) window.ALQ.onIdView();
 }
-function cerrarHoja() { if (abierta) $(abierta).hidden = true; abierta = null; $('hojaBg').hidden = true; if (document.activeElement) document.activeElement.blur?.() }
+function cerrarHoja() {
+  if (abierta) $(abierta).hidden = true; abierta = null; $('hojaBg').hidden = true; if (document.activeElement) document.activeElement.blur?.();
+  if (document.body.classList.contains('ter-on')) { document.body.classList.remove('ter-on'); setTimeout(() => v2d.encuadrar(), 60) }
+}
 $('hojaBg').onclick = cerrarHoja;
 document.querySelectorAll('[data-cerrar]').forEach(b => b.onclick = cerrarHoja);
 
@@ -480,13 +487,14 @@ const TER = { tAB: 'AB', tBC: 'BC', tCD: 'CD', tDA: 'DA', tAC: 'AC', tAl: 'alto'
 function llenarTer() {
   for (const [i, k] of Object.entries(TER)) $(i).value = E.plano[k].toFixed(2);
   $('tMu').value = Math.round(E.plano.muro * 100);
+  $('tCalle').value = E.plano.calle || '';
   datosTer();
 }
 function datosTer() {
   const a = G.ang;
-  $('tDat').innerHTML = `<div><b>${G.area.toFixed(2)} m²</b><span>Área interior</span></div><div><b>${(G.BD).toFixed(2)} m</b><span>Diagonal BN que debería salir</span></div>` +
+  $('tDat').innerHTML = `<div><b>${G.area.toFixed(2)} m²</b><span>Área interior</span></div><div><b>${(G.BD).toFixed(2)} m</b><span>Diagonal BD que debería salir</span></div>` +
     ['A', 'B', 'C', 'D'].map(k => `<div><b>${a[k].toFixed(2)}°</b><span>Ángulo en ${ETQ[k]}</span></div>`).join('') +
-    `<div class="ancho"><span>Mide la otra diagonal, de B a N. Si te sale ${G.BD.toFixed(2)} m, el plano es exacto; si no, revisa MC.</span></div>`;
+    `<div class="ancho"><span>Mide la otra diagonal, de B a D. Si te sale ${G.BD.toFixed(2)} m, el plano es exacto; si no, revisa AC.</span></div>`;
 }
 let tTer = 0;
 Object.keys(TER).concat('tMu').forEach(i => $(i).addEventListener('input', () => {
@@ -495,22 +503,39 @@ Object.keys(TER).concat('tMu').forEach(i => $(i).addEventListener('input', () =>
   const mu = num($('tMu').value); if (mu >= 5 && mu <= 60) p.muro = mu / 100;
   if (p.alto < 1.8 || p.alto > 6) { $('tErr').textContent = 'La altura debe estar entre 1.80 y 6 m.'; return }
   const geo = construir(p);
-  if (!geo) { $('tErr').textContent = 'Con esas medidas el terreno no se puede cerrar. Revisa los lados y la diagonal MC.'; return }
+  if (!geo) { $('tErr').textContent = 'Con esas medidas el terreno no se puede cerrar. Revisa los lados y la diagonal AC.'; return }
   $('tErr').textContent = '';
   E.plano = p; G = geo; datosTer();
   clearTimeout(tTer);
-  tTer = setTimeout(() => { reubicarFuera(); if (v3d) v3d.armarCasa(G, E.plano); v2d.encuadrar(); pintar(); guardar() }, 400);
+  tTer = setTimeout(() => { reubicarFuera(); if (v3d) v3d.armarCasa(G, E.plano); pintar(); guardar() }, 400);   // la vista no se reencuadra: el usuario la mueve a su gusto
 }));
+/* Nombre de la calle (opcional): se ve en 2D y en 3D */
+let tCal = 0;
+$('tCalle').addEventListener('input', () => {
+  E.plano.calle = $('tCalle').value.replace(/\s+/g, ' ').trim().slice(0, 40);
+  if (!E.plano.calle) delete E.plano.calle;
+  pintar(); clearTimeout(tCal);
+  tCal = setTimeout(() => { if (v3d) v3d.armarCasa(G, E.plano); guardar() }, 350);
+});
 /* Si el terreno cambia, lo que quedó fuera de las paredes se vuelve a ubicar (en todos los negocios) */
 function reubicarFuera() {
   for (const N of Object.values(E.negs)) {
-    const r = revisar(G, N.items), fuera = N.items.filter(o => r[o.uid] === 'fuera');
-    if (!fuera.length) continue;
-    for (const o of fuera) { o.x = null; o.y = null; o.rot = 0 }
-    acomodar(G, fuera, N.items.filter(o => !fuera.includes(o)));
+    const r = revisar(G, N.items);
+    let mover = N.items.filter(o => r[o.uid] === 'fuera' || r[o.uid] === 'sin');
+    if (!mover.length) continue;
+    // el baño primero (va al fondo); lo que quede encima de él también se mueve
+    const bano = mover.find(o => o.k === 'bano');
+    if (bano) {
+      bano.x = null; bano.y = null; bano.rot = 0; acomodar(G, [bano], []);
+      if (bano.x != null) mover = mover.concat(N.items.filter(o => o !== bano && !mover.includes(o) && o.x != null && chocan(o, bano)));
+    }
+    const resto = mover.filter(o => o !== bano);
+    for (const o of resto) { o.x = null; o.y = null; o.rot = 0 }
+    acomodar(G, resto, N.items.filter(o => !resto.includes(o) && o.x != null));
+    for (const o of resto) if (o.x == null) { const t = Object.assign({}, o); if (buscarLugar(G, N.items, t)) Object.assign(o, t); else { o.x = null; o.y = null } }
   }
 }
-$('tRest').onclick = () => { E.plano = Object.assign({}, PLANO_INICIAL); G = construir(E.plano); reubicarFuera(); if (v3d) v3d.armarCasa(G, E.plano); llenarTer(); v2d.encuadrar(); pintar(); guardar() };
+$('tRest').onclick = () => { E.plano = Object.assign({}, PLANO_INICIAL, E.plano.calle ? { calle: E.plano.calle } : {}); G = construir(E.plano); reubicarFuera(); if (v3d) v3d.armarCasa(G, E.plano); llenarTer(); v2d.encuadrar(); pintar(); guardar() };
 
 /* Exportar */
 function bajar(nombre, datos, tipo) {
@@ -637,7 +662,7 @@ $('bIman').setAttribute('aria-pressed', E.iman);
 neg();
 pintar();
 modo(E.vista === '3d' ? '3d' : '2d');
-if (migrado) { guardar(true); setTimeout(() => toast('Terreno MBCN: cada negocio empezó de nuevo con muebles que caben.'), 600) }
+if (migrado) { guardar(true); setTimeout(() => toast('Terreno nuevo: cada negocio empezó de nuevo con muebles que caben.'), 600) }
 import('../sync.js?v=' + VERSION).catch(() => {});
 if (!E.tuto) setTimeout(tutorial, 450);
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => v3d && v3d.tema());

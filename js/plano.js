@@ -1,15 +1,14 @@
 /* Geometría del terreno, choques entre muebles y acomodo automático. Todo en metros.
-   El terreno es MBCN: la mitad derecha del croquis ABCD. M está en AB con MB = 2.40 m y N en DC con NC = 2.40 m;
-   los ángulos en B y C son los del croquis. Por dentro se sigue usando A, B, C, D (A = M, D = N);
-   en pantalla y en AutoCAD se muestran M, B, C, N.
-   Plano: M arriba a la izquierda, B arriba a la derecha (MB = portón, paralelo a la calle).
+   El terreno ABCD es la mitad derecha del croquis completo: el nuevo A está sobre el AB del croquis con AB = 2.40 m
+   y el nuevo D sobre su DC con CD = 2.40 m; los ángulos en B y C son los del croquis.
+   Plano: A arriba a la izquierda, B arriba a la derecha (AB = portón, paralelo a la calle).
    x crece hacia la derecha, y crece hacia adentro de la casa (hacia el fondo NC). */
 
 // Croquis completo ABCD (antes): de aquí salen M y N
 export const CROQUIS = { AB: 4.55, BC: 6.55, CD: 4.58, DA: 5.48, AC: 6.90 };
-// MB, BC, CN, NM y la diagonal MC (NM y MC calculadas con los ángulos del croquis)
+// AB, BC, CD, DA y la diagonal AC (DA y AC calculadas con los ángulos del croquis)
 export const PLANO_INICIAL = { AB: 2.40, BC: 6.55, CD: 2.40, DA: 5.984, AC: 6.342, muro: 0.15, alto: 2.8 };
-export const ETQ = { A: 'M', B: 'B', C: 'C', D: 'N' };
+export const ETQ = { A: 'A', B: 'B', C: 'C', D: 'D' };
 // ¿Es el plano guardado el croquis viejo (terreno completo)?
 export const esCroquisViejo = p => !!p && ['AB', 'BC', 'CD', 'DA', 'AC'].every(k => Math.abs((p[k] || 0) - CROQUIS[k]) < 0.005);
 
