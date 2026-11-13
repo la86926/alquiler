@@ -1,9 +1,9 @@
-import { CAT, NEGOCIOS, FUENTES, COL } from './catalogo.js?v=1.3.1';
-import { PLANO_INICIAL, ETQ, colocar, construir, revisar, chocan, iman, acomodar, buscarLugar, areaOcupada, distanciaMuros } from './plano.js?v=1.3.1';
-import { crearVista2D } from './vista2d.js?v=1.3.1';
-import { generarDXF } from './dxf.js?v=1.3.1';
+import { CAT, NEGOCIOS, FUENTES, COL } from './catalogo.js?v=1.4.0';
+import { PLANO_INICIAL, ETQ, colocar, construir, revisar, chocan, iman, acomodar, buscarLugar, areaOcupada, distanciaMuros } from './plano.js?v=1.4.0';
+import { crearVista2D } from './vista2d.js?v=1.4.0';
+import { generarDXF } from './dxf.js?v=1.4.0';
 
-const VERSION = '1.3.1';
+const VERSION = '1.4.0';
 const LS = 'alq-estado-v1';
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -40,7 +40,7 @@ function nuevoEstado() { return { v: 1, ter: 4, plano: Object.assign({}, PLANO_I
    se cambia el terreno y se vuelven a ubicar todos los muebles. */
 function migrar(e) {
   if (!e || (e.ter || 1) >= 4) return false;
-  // v1.3.1: se empieza de nuevo con el terreno ABCD y la distribución propuesta de cada negocio
+  // v1.4.0: se empieza de nuevo con el terreno ABCD y la distribución propuesta de cada negocio
   e.ter = 4;
   e.plano = Object.assign({}, PLANO_INICIAL, { muro: e.plano?.muro || PLANO_INICIAL.muro, alto: e.plano?.alto || PLANO_INICIAL.alto }, e.plano?.calle ? { calle: e.plano.calle } : {});
   const g = construir(e.plano);
@@ -206,7 +206,7 @@ function pintar() {
   const N = neg();
   est = revisar(G, N.items);
   v2d.poner(G, E.plano, N.items, est, sel);
-  if (v3d && E.vista !== '2d') v3d.ponerMuebles(N.items, est, sel);
+  if (v3d && E.vista !== '2d') v3d.ponerMuebles(N.items, est, sel, E.cur);
   // título
   const d = def(E.cur);
   $('titTx').textContent = d.n; $('titIc').innerHTML = icono(d.ic);
@@ -254,7 +254,7 @@ async function modo(m) {
 }
 async function asegurar3D() {
   if (v3d) return v3d;
-  if (!cargando3d) cargando3d = import('./vista3d.js?v=1.3.1').then(m => {
+  if (!cargando3d) cargando3d = import('./vista3d.js?v=1.4.0').then(m => {
     v3d = m.crearVista3D($('v3d'), { item, seleccionar: u => seleccionar(u), arrastrar, fijo: () => fijo(), anguloEl: $('bAng'),
       items: () => neg().items, estatura: () => E.estatura || 1.65, fijarEstatura: h => { E.estatura = h; guardar() }, paseo: on => { document.body.classList.toggle('paseo-on', on); if (on) { seleccionar(null); cerrarHoja() } } });
     v3d.armarCasa(G, E.plano); v3d.mostrar(true); v3d.vista('iso', false);
@@ -674,7 +674,7 @@ function tutorial() {
     { tx: 'O toca aquí y escribe el ángulo: positivo gira antihorario, negativo horario.', el: () => $('bAng'), anim: 'toca' },
     { tx: 'El candado fija todos los muebles. En 2D empieza abierto para moverlos; en 3D empieza cerrado para que no muevas nada sin querer.', el: () => $('bFijo'), anim: 'toca' },
     { tx: 'En 3D ves lo mismo, en el mismo lugar. Para mover ahí, abre el candado. Con el botón de la persona entras y caminas por dentro con las flechas.', el: () => $('b3d'), anim: 'toca', antes: () => seleccionar(null) },
-    { tx: 'En 3D-2 ves los mismos muebles con acabados reales: madera, tela, vidrio, metal, luz y sombras.', el: () => $('b4d'), anim: 'toca' },
+    { tx: 'En 3D-2 ves los mismos muebles con fotos reales: productos según el negocio, bebidas, frutas, madera, piso y paredes.', el: () => $('b4d'), anim: 'toca' },
     { tx: 'Elige un negocio y mira si todo cabe.', el: () => $('titBtn'), anim: 'toca' },
     { tx: '¿Prefieres armarlo tú? En la Lista, «Empezar de cero» quita los muebles que vienen por defecto.', el: () => $('lsCero'), anim: 'toca', antes: () => abrir('hLista') },
     { tx: 'Luego agrega los tuyos, con medidas de Sodimac, Promart y otras tiendas.', el: () => $('bAdd'), anim: 'toca', antes: () => cerrarHoja() }

@@ -1,9 +1,11 @@
 /* Modelos 3D de los muebles, armados con piezas simples para que la caja total mida exactamente
    ancho × fondo × alto. Ejes locales: x = ancho, y = alto, z = fondo; el frente mira hacia +z. */
 import * as THREE from 'three';
-import { realzar, productosReales, plantaReal } from './realista.js?v=1.3.1';
+import { realzar, plantaReal } from './realista.js?v=1.4.0';
+import { tex, productosDe, ponerModelo } from './texturas.js?v=1.4.0';
 
-let REAL = false;   // 4D: acabados reales
+let REAL = false;   // 3D-2: acabados reales y fotos
+let NEG = '', OBJ = {};   // negocio y mueble: deciden qué productos van en los estantes
 
 const mats = new Map();
 function mat(color, o = {}) {
@@ -15,6 +17,51 @@ const VIDRIO = () => mat('#cfe9f5', { transparent: true, opacity: 0.32, roughnes
 const METAL = () => mat('#b9c0c8', { roughness: 0.35, metalness: 0.6 });
 const OSCURO = () => mat('#4a4f57', { roughness: 0.6 });
 const BLANCO = () => mat('#f4f3ee', { roughness: 0.4 });
+
+/* ---------- 3D-2: fotos reales (productos, bebidas, frutas, ropa, pasteles, herramientas) ---------- */
+const matsFoto = new Map();
+function matFoto(nombre, o = {}) {
+  const k = nombre + JSON.stringify(o);
+  if (!matsFoto.has(k)) { const m = new THREE.MeshStandardMaterial(Object.assign({ map: tex(nombre), roughness: 0.55 }, o)); m.userData.real = 1; matsFoto.set(k, m) }
+  return matsFoto.get(k);
+}
+const ASP = { abarrotes: 1024 / 293, medicinas: 1024 / 365, ferreteria: 1024 / 195, libros1: 1024 / 207, libros2: 1024 / 199, libros3: 1024 / 177,
+  herramientas: 1024 / 683, bebidas: 640 / 984, ropa: 1024 / 503, pasteles: 1024 / 660, frutas: 1 };
+// Coordenadas de una cara para ver la foto a escala real (se repite si el mueble es más ancho, se recorta si es más angosto)
+function uvCara(geo, cara, ancho, alto, nombre, porAlto = true) {
+  const uv = geo.attributes.uv, a = ASP[nombre] || 1;
+  const su = porAlto ? ancho / (alto * a) : 1, sv = porAlto ? 1 : alto * a / ancho;
+  const ou = su < 1 ? (1 - su) / 2 : 0, ov = sv < 1 ? (1 - sv) / 2 : 0;
+  for (let i = cara * 4; i < cara * 4 + 4; i++) uv.setXY(i, ou + uv.getX(i) * su, ov + uv.getY(i) * sv);
+  uv.needsUpdate = true;
+}
+const LADO = () => { const m = mat('#e4ded4', { roughness: 0.9 }); m.userData.real = 1; return m };
+function malla(g, geo, mats, x, y, z, sombra = true) {
+  const me = new THREE.Mesh(geo, mats); me.position.set(x, y, z); me.castShadow = sombra; me.receiveShadow = true; me.userData.real = 1; g.add(me); return me;
+}
+// Bloque de productos de un nivel con la foto al frente (y atrás si dosCaras)
+function bandaProd(g, w, d, y, h, nivel, dosCaras) {
+  if (h < 0.05 || w < 0.05 || d < 0.02) return;
+  const tipo = productosDe(OBJ, NEG), nombre = tipo === 'libros' ? 'libros' + (1 + (nivel % 3)) : tipo;
+  const geo = new THREE.BoxGeometry(w, h, d);
+  uvCara(geo, 4, w, h, nombre); if (dosCaras) uvCara(geo, 5, w, h, nombre);
+  const f = matFoto(nombre), l = LADO();
+  return malla(g, geo, [l, l, l, l, f, dosCaras ? f : l], 0, y + h / 2, 0);
+}
+// Lámina con foto en ambas caras
+function foto(g, nombre, w, h, x, y, z, o = {}, grosor = 0.004) {
+  const geo = new THREE.BoxGeometry(w, h, grosor);
+  uvCara(geo, 4, w, h, nombre); uvCara(geo, 5, w, h, nombre);
+  const f = matFoto(nombre, o), l = LADO();
+  return malla(g, geo, [l, l, l, l, f, f], x, y + h / 2, z, false);
+}
+// Bloque con foto arriba (frutas)
+function tapaFoto(g, nombre, w, h, d, x, y, z) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  uvCara(geo, 2, w, d, nombre, false);
+  const l = LADO();
+  return malla(g, geo, [l, l, matFoto(nombre, { roughness: 0.7 }), l, l, l], x, y + h / 2, z);
+}
 
 function caja(g, w, h, d, x, y, z, m) {
   if (w <= 0 || h <= 0 || d <= 0) return;
@@ -49,12 +96,12 @@ function estante(g, w, d, h, niv, col, cerrado) {
   for (let i = 0; i < niv; i++) {
     const y = i === niv - 1 ? h - t : 0.08 + i * (h - 0.08 - t) / (niv - 1);
     caja(g, w, t, d, 0, y, 0, m);
-    if (i < niv - 1) productos(g, w - 0.06, d - 0.06, y + t, Math.min(0.22, (h - 0.1) / niv - 0.08), i);
+    if (i < niv - 1) { if (REAL) { const gap = (h - 0.08 - t) / (niv - 1) - t; bandaProd(g, w - 0.06, d - 0.1, y + t, Math.min(gap * 0.84, 0.42), i, false) } else productos(g, w - 0.06, d - 0.06, y + t, Math.min(0.22, (h - 0.1) / niv - 0.08), i) }
   }
 }
 const TONOS = ['#f3c6cf', '#c7dcf3', '#f2e2a8', '#cfe6d2', '#e2d3f0', '#f5d2b8', '#d6dde4'];
 function productos(g, w, d, y, h, semilla) {
-  if (REAL) return productosReales(g, w, d, y, h, semilla);
+  if (REAL) return bandaProd(g, w, d * 0.8, y, Math.max(h, 0.1), semilla, false);
   if (h < 0.05) return;
   let x = -w / 2, i = semilla;
   while (x < w / 2 - 0.06) {
@@ -65,6 +112,7 @@ function productos(g, w, d, y, h, semilla) {
   }
 }
 function ropa(g, w, y, z, n, larga = 0.7) {
+  if (REAL) { foto(g, 'ropa', w, larga, 0, y - larga, z, { roughness: 0.95 }, 0.1); return }
   for (let i = 0; i < n; i++) {
     const x = -w / 2 + 0.06 + i * (w - 0.12) / Math.max(1, n - 1);
     caja(g, 0.035, larga, 0.4, x, y - larga, z, mat(TONOS[i % TONOS.length], { roughness: 0.9 }));
@@ -80,8 +128,12 @@ function vitrina(g, w, d, h, col, frio) {
   for (let i = 1; i < niv; i++) {
     const y = 0.12 + i * (h - 0.12) / niv;
     caja(g, w - 0.06, 0.008, d - 0.06, 0, y, 0, VIDRIO());
-    productos(g, w - 0.1, d - 0.12, y + 0.008, 0.12, i + 3);
+    if (REAL && frio) continue;
+    if (REAL) bandaProd(g, w - 0.1, d - 0.16, y + 0.008, Math.min(0.2, (h - 0.12) / niv - 0.06), i, false);
+    else productos(g, w - 0.1, d - 0.12, y + 0.008, 0.12, i + 3);
   }
+  if (REAL && !frio) bandaProd(g, w - 0.1, d - 0.16, 0.12, Math.min(0.2, (h - 0.12) / niv - 0.06), 0, false);
+  if (REAL && frio) foto(g, 'pasteles', w - 0.1, h - 0.24, 0, 0.13, -d / 2 + 0.08, { emissive: '#ffffff', emissiveMap: tex('pasteles'), emissiveIntensity: 0.15 }, 0.01);
   if (frio) caja(g, w, 0.04, d, 0, h - 0.05, 0, mat('#ffffff', { emissive: '#dbeeff', emissiveIntensity: 0.4 }));
 }
 
@@ -100,8 +152,8 @@ function letreroBano(g, x, y, z) {
   const p = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.075), new THREE.MeshBasicMaterial({ map: texBano, toneMapped: false, transparent: true }));
   p.position.set(x, y, z); g.add(p);
 }
-export function construirModelo(o, real = false) {
-  REAL = real;
+export function construirModelo(o, real = false, neg = '') {
+  REAL = real; NEG = neg; OBJ = o;
   const g = new THREE.Group();
   const w = o.w, d = o.d, h = o.h, c = o.c || '#dddddd', m = mat(c);
   switch (o.k) {
@@ -115,15 +167,17 @@ export function construirModelo(o, real = false) {
         for (const s of [-1, 1]) {
           const dd = (d / 2 - 0.02) * (1 - i * 0.08);
           caja(g, w, 0.02, dd, 0, y, s * (0.015 + dd / 2), m);
-          productos(g, w - 0.04, dd - 0.04, y + 0.02, 0.2, i * 3 + (s > 0 ? 1 : 0));
+          if (!REAL) productos(g, w - 0.04, dd - 0.04, y + 0.02, 0.2, i * 3 + (s > 0 ? 1 : 0));
         }
+        if (REAL) { const dd = (d / 2 - 0.02) * (1 - i * 0.08); bandaProd(g, w - 0.04, 2 * dd - 0.06, y + 0.02, Math.min(0.3, (h - 0.15) / niv - 0.06), i, true) }
       }
       break;
     }
     case 'panel': {
       caja(g, w, h, d * 0.4, 0, 0, -d * 0.3, m);
       for (let i = 0; i < 8; i++) caja(g, w, 0.008, 0.01, 0, 0.1 + i * (h - 0.2) / 7, -d * 0.1 + 0.005, mat('#c9c9c4'));
-      for (let i = 0; i < 10; i++) caja(g, 0.03, 0.18, 0.06, -w / 2 + 0.1 + (i % 5) * (w - 0.2) / 4, 0.25 + Math.floor(i / 5) * 0.6, d / 2 - 0.06, mat(TONOS[i % 7]));
+      if (REAL) foto(g, 'herramientas', w, h, 0, 0, -d * 0.1 + 0.012);
+      else for (let i = 0; i < 10; i++) caja(g, 0.03, 0.18, 0.06, -w / 2 + 0.1 + (i % 5) * (w - 0.2) / 4, 0.25 + Math.floor(i / 5) * 0.6, d / 2 - 0.06, mat(TONOS[i % 7]));
       break;
     }
     case 'repisa': caja(g, w, h, d, 0, 0, 0, m); break;
@@ -139,7 +193,8 @@ export function construirModelo(o, real = false) {
       caja(g, w, 0.06, d, 0, h - 0.06, 0, mat('#e9edf0'));
       caja(g, 0.02, h - 0.16, d, -w / 2 + 0.01, 0.1, 0, METAL()); caja(g, 0.02, h - 0.16, d, w / 2 - 0.01, 0.1, 0, METAL());
       caja(g, w - 0.04, h - 0.16, d - 0.02, 0, 0.1, 0, VIDRIO());
-      for (let i = 1; i < 5; i++) { const y = 0.1 + i * (h - 0.16) / 5; caja(g, w - 0.04, 0.008, d - 0.04, 0, y, 0, VIDRIO()); productos(g, w - 0.1, d - 0.12, y, 0.14, i) }
+      for (let i = 1; i < 5; i++) { const y = 0.1 + i * (h - 0.16) / 5; caja(g, w - 0.04, 0.008, d - 0.04, 0, y, 0, VIDRIO()); if (REAL) bandaProd(g, w - 0.1, d - 0.12, y + 0.008, Math.min(0.24, (h - 0.16) / 5 - 0.06), i, false); else productos(g, w - 0.1, d - 0.12, y, 0.14, i) }
+      if (REAL) bandaProd(g, w - 0.1, d - 0.12, 0.1, Math.min(0.24, (h - 0.16) / 5 - 0.06), 0, false);
       break;
     }
     case 'caja': {
@@ -151,8 +206,11 @@ export function construirModelo(o, real = false) {
     case 'refri': {
       caja(g, w, h, d - 0.02, 0, 0, -0.01, mat('#3e4650', { roughness: 0.5 }));
       caja(g, w - 0.08, h - 0.32, 0.02, 0, 0.12, d / 2 - 0.01, VIDRIO());
-      caja(g, w - 0.08, h - 0.32, 0.005, 0, 0.12, d / 2 - 0.035, mat('#ffffff', { emissive: '#e3f1ff', emissiveIntensity: 0.55 }));
-      for (let i = 0; i < 5; i++) productos(g, w - 0.12, d - 0.15, 0.16 + i * (h - 0.4) / 5, 0.2, i + 2);
+      if (REAL) foto(g, 'bebidas', w - 0.08, h - 0.32, 0, 0.12, d / 2 - 0.04, { emissive: '#ffffff', emissiveMap: tex('bebidas'), emissiveIntensity: 0.3 }, 0.006);
+      else {
+        caja(g, w - 0.08, h - 0.32, 0.005, 0, 0.12, d / 2 - 0.035, mat('#ffffff', { emissive: '#e3f1ff', emissiveIntensity: 0.55 }));
+        for (let i = 0; i < 5; i++) productos(g, w - 0.12, d - 0.15, 0.16 + i * (h - 0.4) / 5, 0.2, i + 2);
+      }
       caja(g, w, 0.18, 0.02, 0, h - 0.18, d / 2 - 0.01, mat('#cfe3f7', { emissive: '#cfe3f7', emissiveIntensity: 0.3 }));
       break;
     }
@@ -183,7 +241,7 @@ export function construirModelo(o, real = false) {
       caja(g, w, 0.06, d, 0, h - 0.06, 0, mat('#d55f6b'));
       break;
     }
-    case 'mesa': mesa(g, w, d, h, c); if (o.n === 'Mesa exhibidora') productos(g, w - 0.1, d - 0.2, h, 0.08, 2); break;
+    case 'mesa': mesa(g, w, d, h, c); if (o.id === 'mesaexh' || o.n === 'Mesa exhibidora') { if (REAL && neg === 'frutas') tapaFoto(g, 'frutas', w - 0.06, 0.07, d - 0.06, 0, h, 0); else productos(g, w - 0.1, d - 0.2, h, 0.08, 2) } break;
     case 'mesa2s': {
       mesa(g, w, 0.7, 0.74, c);
       silla(g, 0, -0.55, 0, '#e6d4e8'); silla(g, 0, 0.55, Math.PI, '#e6d4e8');
@@ -399,6 +457,7 @@ export function construirModelo(o, real = false) {
     case 'escalonado': {
       for (let i = 0; i < 3; i++) {
         const hh = h * (i + 1) / 3, dd = d / 3;
+        if (REAL) { const z = d / 2 - dd / 2 - (2 - i) * dd; caja(g, w, hh - 0.07, dd, 0, 0, z, m); tapaFoto(g, 'frutas', w - 0.03, 0.07, dd - 0.03, 0, hh - 0.07, z); continue }
         caja(g, w, hh, dd, 0, 0, d / 2 - dd / 2 - (2 - i) * dd, m);
         for (let j = 0; j < 4; j++) caja(g, w / 4 - 0.03, 0.08, dd - 0.06, -w / 2 + w / 8 + j * w / 4, hh, d / 2 - dd / 2 - (2 - i) * dd, mat(['#f3c6cf', '#f2e2a8', '#cfe6d2', '#f6d3ba'][(i + j) % 4], { roughness: 0.9 }));
       }
@@ -408,7 +467,8 @@ export function construirModelo(o, real = false) {
       const n = Math.max(1, Math.round(h / 0.3));
       for (let i = 0; i < n; i++) {
         caja(g, w, h / n - 0.01, d, 0, i * h / n, 0, mat(c, { roughness: 0.95 }));
-        caja(g, w - 0.06, 0.05, d - 0.06, 0, (i + 1) * h / n - 0.06, 0, mat(['#f3c6cf', '#f2e2a8', '#cfe6d2'][i % 3]));
+        if (REAL) tapaFoto(g, 'frutas', w - 0.05, 0.05, d - 0.05, 0, (i + 1) * h / n - 0.065, 0);
+        else caja(g, w - 0.06, 0.05, d - 0.06, 0, (i + 1) * h / n - 0.06, 0, mat(['#f3c6cf', '#f2e2a8', '#cfe6d2'][i % 3]));
       }
       break;
     }
@@ -428,7 +488,7 @@ export function construirModelo(o, real = false) {
       break;
     }
     case 'planta': {
-      if (REAL) { plantaReal(g, w, h); break }
+      if (REAL) { const tmp = new THREE.Group(); g.add(tmp); plantaReal(tmp, w, h); ponerModelo(g, 'planta', w, d, h, () => g.remove(tmp)); break }   // modelo 3D real (Khronos, CC BY 4.0)
       cil(g, w / 2 * 0.7, 0.35, 0, 0, 0, mat('#e8d8c8'));
       const hoja = new THREE.Mesh(new THREE.SphereGeometry(w / 2, 16, 12), mat('#9fc7a6', { roughness: 0.9 }));
       hoja.scale.set(1, (h - 0.35) / w, 1); hoja.position.y = 0.35 + (h - 0.35) / 2; hoja.castShadow = true; g.add(hoja);

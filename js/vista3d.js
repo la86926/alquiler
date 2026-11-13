@@ -1,10 +1,11 @@
 /* Vista 3D (three.js). Mapeo: x del plano → x, altura → y, y del plano → −z. */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { anilloMuros } from './plano.js?v=1.3.1';
-import { construirModelo } from './modelos.js?v=1.3.1';
+import { anilloMuros } from './plano.js?v=1.4.0';
+import { construirModelo } from './modelos.js?v=1.4.0';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { texPiso, texPared, texAsfalto, texVereda, uvMundo } from './realista.js?v=1.3.1';
+import { texAsfalto, texVereda, uvMundo } from './realista.js?v=1.4.0';
+import { tex, alCargar } from './texturas.js?v=1.4.0';
 
 const rad = g => g * Math.PI / 180;
 
@@ -95,19 +96,19 @@ export function crearVista3D(cont, cb) {
       casa.add(sp); letras.push(sp);
     }
     // piso
-    const piso = new THREE.Mesh(new THREE.ShapeGeometry(forma(g.pts)), real ? new THREE.MeshPhysicalMaterial({ map: texPiso(), roughness: 0.32, clearcoat: 0.35, clearcoatRoughness: 0.25 }) : new THREE.MeshStandardMaterial({ map: texturaPiso(), roughness: 0.85 }));
+    const piso = new THREE.Mesh(new THREE.ShapeGeometry(forma(g.pts)), real ? new THREE.MeshPhysicalMaterial({ map: tex('piso'), roughness: 0.32, clearcoat: 0.35, clearcoatRoughness: 0.25 }) : new THREE.MeshStandardMaterial({ map: texturaPiso(), roughness: 0.85 }));
     if (real) uvMundo(piso.geometry, 1.2);
     piso.rotation.x = -Math.PI / 2; piso.receiveShadow = true; casa.add(piso);
     // muros
     // cada pared por separado, para poder ocultar la que tapa la vista al caminar
     const [, Ax, Dx, Cx, Bx] = anilloMuros(g, p.muro);
-    const matM = real ? [new THREE.MeshStandardMaterial({ color: '#c4b39e', map: texPared(), roughness: 0.95 }), new THREE.MeshStandardMaterial({ color: '#f3eee7', map: texPared(), bumpMap: texPared(), bumpScale: 0.3, roughness: 0.9 })]
+    const matM = real ? [new THREE.MeshStandardMaterial({ color: '#ddd6cb', map: tex('pared'), roughness: 0.95 }), new THREE.MeshStandardMaterial({ color: '#ffffff', map: tex('pared'), bumpMap: tex('pared'), bumpScale: 0.6, roughness: 0.92 })]
       : [new THREE.MeshStandardMaterial({ color: '#c9b9a6', roughness: 0.95 }), new THREE.MeshStandardMaterial({ color: '#f7f5f0', roughness: 0.92 })];
     mallaMuros = new THREE.Group(); murosPor = {};
     for (const [id, q] of Object.entries({ BC: [g.B, g.C, Cx, Bx], CD: [g.C, g.D, Dx, Cx], DA: [g.D, g.A, Ax, Dx] })) {
       const geoM = new THREE.ExtrudeGeometry(forma(q), { depth: p.alto, bevelEnabled: false });
       geoM.rotateX(-Math.PI / 2);
-      if (real) uvMundo(geoM, 1);
+      if (real) uvMundo(geoM, 1.4);
       const m = new THREE.Mesh(geoM, matM); m.castShadow = m.receiveShadow = real; mallaMuros.add(m); murosPor[id] = m;
     }
     mallaMuros.scale.y = altoMuros; casa.add(mallaMuros);
@@ -148,8 +149,10 @@ export function crearVista3D(cont, cb) {
     sucio = true;
   }
 
-  const firma = o => [o.k, o.w, o.d, o.h, o.c, o.niv, o.cerrado, real].join('|');
-  function ponerMuebles(items, estados, sel) {
+  let negAct = '';
+  const firma = o => [o.k, o.w, o.d, o.h, o.c, o.niv, o.cerrado, real, real ? negAct : ''].join('|');
+  function ponerMuebles(items, estados, sel, neg = '') {
+    negAct = neg;
     const vivos = new Set();
     for (const o of items) {
       if (o.x == null) continue;
@@ -159,7 +162,7 @@ export function crearVista3D(cont, cb) {
       if (!r || r.firma !== f) {
         if (r) muebles.remove(r.grupo);
         const grupo = new THREE.Group();
-        const m = construirModelo(o, real); grupo.add(m);
+        const m = construirModelo(o, real, negAct); grupo.add(m);
         const caja = new THREE.Mesh(new THREE.BoxGeometry(o.w, o.h, o.d), new THREE.MeshBasicMaterial({ visible: false }));
         caja.position.y = o.h / 2; caja.userData.uid = o.uid; grupo.add(caja);
         const borde = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(o.w + 0.01, o.h + 0.01, o.d + 0.01)), new THREE.LineBasicMaterial({ color: '#2f6fdb' }));
@@ -271,6 +274,8 @@ export function crearVista3D(cont, cb) {
     if (etiqueta.innerHTML !== t) etiqueta.innerHTML = t;
     etiqueta.style.transform = `translate(${(v.x + 1) / 2 * cont.clientWidth}px, ${(1 - v.y) / 2 * cont.clientHeight}px) translate(-50%, -100%)`;
   }
+
+  alCargar(() => { sucio = true });   // las fotos y la planta llegan después: se vuelve a dibujar
 
   function tam() {
     const w = cont.clientWidth, h = cont.clientHeight;

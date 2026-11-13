@@ -7,3 +7,8 @@ Simulador del local en 2D y 3D con muebles de medidas reales, para ver qué nego
 - Los planos para AutoCAD (`.dxf`, en metros) están en la carpeta `dxf/` y también se exportan desde la web.
 - Sincronización con **Mi ID** en la misma nube de Firebase del ajedrez (documentos `progresos/alq<ID>`).
 - «Empezar de cero» (en la Lista o en Negocios) quita los muebles que vienen por defecto para armar el plano propio.
+
+## Créditos
+
+- Planta 3D (pestaña 3D-2): «Diffuse Transmission Plant» de Eric Chadwick y Rico Cilliers (Khronos glTF Sample Assets), CC BY 4.0. Comprimida para la web.
+- Fotos de productos, bebidas, frutas, ropa, pasteles, piso, paredes y madera: creadas para este proyecto.

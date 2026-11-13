@@ -334,3 +334,6 @@ body.ter-on #hTer .h-top{top:-8px;margin-top:-8px;padding-top:18px}
 .paseo .pest-h{display:flex;align-items:center;justify-content:space-between}
 .paseo .pest-x{width:30px;height:30px;border:0;border-radius:50%;background:var(--faint);display:grid;place-items:center;cursor:pointer}
 .paseo .pest-x svg{width:13px;height:13px;fill:none;stroke:var(--fg);stroke-width:1.8;stroke-linecap:round}
+
+.creditos{margin:auto 10px 0;font-size:11px;line-height:1.4;color:var(--muted);opacity:.85}
+.creditos a{color:inherit}
